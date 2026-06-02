@@ -151,6 +151,8 @@ def main():
         rmse_str = f"{metrics['RMSE']:.4f}" if not np.isnan(metrics['RMSE']) else "N/A"
         mae_str = f"{metrics['MAE']:.4f}" if not np.isnan(metrics['MAE']) else "N/A"
         print(f"  {model:<14} {rmse_str:<12} {mae_str:<12}")
+        if model == 'ARIMA' and 'error' in metrics and metrics['error']:
+            print(f"         Error: {metrics['error']}")
     print("-" * 50)
     print()
 
@@ -162,7 +164,7 @@ def main():
     print("=" * 70)
 
     band_results = band_analysis.analyze_band_predictability(
-        mel_spec, n_mels=n_mels, forecast_horizon=forecast_horizon, verbose=True)
+        mel_spec, forecast_horizon=forecast_horizon)
     
     band_summary = band_analysis.compute_band_error_summary(band_results)
     band_analysis.print_band_summary(band_summary)
@@ -223,7 +225,7 @@ def main():
     fig_dict = {}
 
     print("  [6.1] Waveform plot...")
-    fig_dict['01_waveform'] = visualization.plot_waveform(t, waveform, sr, title="Audio Waveform")
+    fig_dict['01_waveform'] = visualization.plot_waveform(t, waveform, title="Audio Waveform")
 
     print("  [6.2] FFT magnitude spectrum...")
     fig_dict['02_fft_spectrum'] = visualization.plot_fft(freqs, fft_mag, title="FFT Magnitude Spectrum")

@@ -4,167 +4,842 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>音频时间序列分析系统</title>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        :root {
+            --primary: #ff6b00;
+            --primary-light: #ff8c00;
+            --bg-main: #0a0a0a;
+            --bg-card: linear-gradient(145deg, #141414, #1a1a1a);
+            --text-primary: #ffffff;
+            --text-secondary: rgba(255, 255, 255, 0.6);
+            --border-color: rgba(255, 107, 0, 0.2);
+            --glow-color: rgba(255, 107, 0, 0.15);
+        }
+
+        [data-theme="light"] {
+            --primary: #dc2626;
+            --primary-light: #ef4444;
+            --bg-main: #f8fafc;
+            --bg-card: linear-gradient(145deg, #ffffff, #f1f5f9);
+            --text-primary: #1e293b;
+            --text-secondary: rgba(30, 41, 59, 0.6);
+            --border-color: rgba(220, 38, 38, 0.2);
+            --glow-color: rgba(220, 38, 38, 0.08);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Rajdhani', 'Segoe UI', sans-serif;
+            background: var(--bg-main);
+            color: var(--text-primary);
+            overflow-x: hidden;
             min-height: 100vh;
+            transition: all 0.5s ease;
         }
-        .container {
-            max-width: 800px;
-            margin-top: 50px;
+
+        /* 主题切换按钮 */
+        .theme-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: 2px solid var(--primary);
+            background: var(--bg-card);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px var(--glow-color);
         }
-        .card {
-            border-radius: 15px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+
+        .theme-toggle:hover {
+            transform: scale(1.1) rotate(180deg);
+            box-shadow: 0 8px 25px var(--glow-color);
         }
-        .card-header {
-            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-            border-radius: 15px 15px 0 0 !important;
-            color: white;
-            font-weight: bold;
+
+        .theme-toggle i {
+            font-size: 20px;
+            color: var(--primary);
+            transition: all 0.3s ease;
+        }
+
+        /* ========== KV区 ========== */
+        .kv-section {
+            position: relative;
+            height: 100vh;
+            min-height: 600px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #0d0d0d 100%);
+            transition: all 0.5s ease;
+        }
+
+        [data-theme="light"] .kv-section {
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #f1f5f9 100%);
+        }
+
+        .kv-bg-particles { position: absolute; width: 100%; height: 100%; top: 0; left: 0; }
+
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--primary);
+            border-radius: 50%;
+            opacity: 0.6;
+            animation: floatParticle 8s infinite ease-in-out;
+        }
+
+        @keyframes floatParticle {
+            0%, 100% { transform: translateY(0) translateX(0); opacity: 0.6; }
+            25% { transform: translateY(-100px) translateX(50px); opacity: 1; }
+            50% { transform: translateY(-200px) translateX(-30px); opacity: 0.4; }
+            75% { transform: translateY(-150px) translateX(80px); opacity: 0.8; }
+        }
+
+        .wave-line {
+            position: absolute;
+            width: 200%;
+            height: 2px;
+            left: -50%;
+            background: linear-gradient(90deg, transparent, var(--primary), var(--primary-light), var(--primary), transparent);
+            animation: waveMove 4s infinite linear;
+        }
+
+        .wave-line:nth-child(1) { top: 20%; animation-delay: 0s; opacity: 0.3; }
+        .wave-line:nth-child(2) { top: 40%; animation-delay: 1s; opacity: 0.5; }
+        .wave-line:nth-child(3) { top: 60%; animation-delay: 2s; opacity: 0.4; }
+        .wave-line:nth-child(4) { top: 80%; animation-delay: 3s; opacity: 0.3; }
+
+        @keyframes waveMove { 0% { transform: translateX(-30%); } 100% { transform: translateX(30%); } }
+
+        .kv-glow-orb {
+            position: absolute;
+            width: 400px;
+            height: 400px;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.15;
+            animation: orbPulse 6s infinite ease-in-out;
+        }
+
+        .kv-glow-orb.orange { 
+            background: radial-gradient(circle, var(--primary), transparent);
+            top: 10%; right: 10%;
+        }
+        
+        .kv-glow-orb.orange2 { 
+            background: radial-gradient(circle, var(--primary-light), transparent);
+            bottom: 10%; left: 10%; animation-delay: 3s;
+        }
+
+        @keyframes orbPulse {
+            0%, 100% { transform: scale(1); opacity: 0.15; }
+            50% { transform: scale(1.3); opacity: 0.25; }
+        }
+
+        .kv-content { text-align: center; z-index: 10; padding: 40px; }
+
+        .kv-title-main {
+            font-family: 'Orbitron', monospace;
+            font-size: clamp(2.5rem, 7vw, 5rem);
+            font-weight: 900;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 30%, #ffa500 60%, var(--primary) 100%);
+            background-size: 300% auto;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: titleShine 4s linear infinite, titleFloat 3s ease-in-out infinite;
+            letter-spacing: 4px;
+            margin-bottom: 10px;
+        }
+
+        [data-theme="light"] .kv-title-main {
+            background: linear-gradient(135deg, #dc2626 0%, #ef4444 30%, #f97316 60%, #dc2626 100%);
+            background-size: 300% auto;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        @keyframes titleShine { to { background-position: 300% center; } }
+
+        @keyframes titleFloat {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-15px); }
+        }
+
+        .kv-subtitle {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: clamp(1rem, 2.5vw, 1.5rem);
+            color: var(--text-secondary);
+            font-weight: 300;
+            letter-spacing: 4px;
+            margin-bottom: 40px;
+            animation: fadeInUp 1s ease-out 0.5s both;
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .kv-tagline {
             font-size: 1.2rem;
-        }
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border: none;
-            border-radius: 25px;
-            padding: 10px 40px;
-            font-weight: bold;
-        }
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
-        }
-        .form-group label {
+            color: var(--primary);
             font-weight: 600;
-            color: #333;
+            letter-spacing: 4px;
+            margin-bottom: 50px;
+            animation: fadeInUp 1s ease-out 0.8s both;
         }
-        .file-input {
-            border: 2px dashed #ccc;
-            border-radius: 10px;
-            padding: 30px;
+
+        .scroll-indicator {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            animation: bounce 2s infinite;
+            z-index: 10;
+        }
+
+        .scroll-indicator i { font-size: 24px; color: var(--primary); }
+
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% { transform: translateX(-50%) translateY(0); }
+            40% { transform: translateX(-50%) translateY(-20px); }
+            60% { transform: translateX(-50%) translateY(-10px); }
+        }
+
+        /* ========== 主内容区 ========== */
+        .main-section {
+            background: var(--bg-main);
+            padding: 80px 20px;
+            position: relative;
+            transition: all 0.5s ease;
+        }
+
+        .main-container { max-width: 1100px; margin: 0 auto; }
+
+        .section-title {
+            font-family: 'Orbitron', monospace;
+            font-size: 2rem;
+            color: var(--primary);
+            text-align: center;
+            margin-bottom: 50px;
+            position: relative;
+            letter-spacing: 3px;
+        }
+
+        .section-title::after {
+            content: '';
+            position: absolute;
+            bottom: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80px;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, var(--primary), transparent);
+        }
+
+        /* 上传卡片 */
+        .upload-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 45px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+            overflow: hidden;
+        }
+
+        [data-theme="light"] .upload-card {
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 1);
+        }
+
+        .upload-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--primary), transparent);
+            animation: cardScan 3s infinite linear;
+        }
+
+        @keyframes cardScan { to { left: 100%; } }
+
+        .upload-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--primary);
+            box-shadow: 0 30px 80px var(--glow-color), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+        }
+
+        .form-label-custom {
+            color: var(--text-primary);
+            font-weight: 600;
+            font-size: 1rem;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .form-label-custom i { color: var(--primary); font-size: 1.1rem; }
+
+        .file-upload-zone {
+            border: 2px dashed var(--border-color);
+            border-radius: 16px;
+            padding: 35px;
             text-align: center;
             cursor: pointer;
             transition: all 0.3s ease;
+            background: var(--glow-color);
+            position: relative;
+            overflow: hidden;
         }
-        .file-input:hover {
-            border-color: #667eea;
-            background: #f8f9ff;
+
+        .file-upload-zone:hover {
+            border-color: var(--primary);
+            background: var(--glow-color);
+            transform: scale(1.02);
         }
-        .file-input input {
-            display: none;
+
+        .file-upload-zone input[type="file"] { display: none; }
+
+        .file-icon-wrapper {
+            width: 70px;
+            height: 70px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-light));
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 18px;
+            animation: iconPulse 2s infinite ease-in-out;
         }
-        .file-icon {
-            font-size: 48px;
-            color: #667eea;
-            margin-bottom: 10px;
+
+        @keyframes iconPulse {
+            0%, 100% { box-shadow: 0 0 0 0 var(--glow-color); }
+            50% { box-shadow: 0 0 0 15px transparent; }
         }
-        .param-group {
-            background: #f8f9fa;
+
+        .file-icon-wrapper i { font-size: 28px; color: #fff; }
+
+        .file-text {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            transition: color 0.3s;
+        }
+
+        .file-upload-zone:hover .file-text { color: var(--primary); }
+
+        /* 参数区域 */
+        .params-panel {
+            background: var(--glow-color);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 28px;
+            margin-top: 30px;
+        }
+
+        .params-header {
+            color: var(--primary);
+            font-family: 'Orbitron', monospace;
+            font-size: 1rem;
+            margin-bottom: 22px;
+            letter-spacing: 2px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .custom-input {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border-color);
             border-radius: 10px;
-            padding: 20px;
-            margin-top: 20px;
+            color: var(--text-primary);
+            padding: 14px 18px;
+            font-size: 1rem;
+            font-family: 'Rajdhani', sans-serif;
+            transition: all 0.3s;
+            width: 100%;
+        }
+
+        [data-theme="light"] .custom-input {
+            background: rgba(255, 255, 255, 0.9);
+        }
+
+        .custom-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 20px var(--glow-color);
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        [data-theme="light"] .custom-input:focus {
+            background: #fff;
+        }
+
+        /* 提交按钮 */
+        .submit-btn {
+            background: linear-gradient(135deg, var(--primary), var(--primary-light));
+            color: #fff;
+            border: none;
+            border-radius: 30px;
+            padding: 16px 55px;
+            font-size: 1.15rem;
+            font-weight: 700;
+            font-family: 'Orbitron', monospace;
+            letter-spacing: 3px;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+            overflow: hidden;
+            margin-top: 35px;
+        }
+
+        .submit-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transition: left 0.5s;
+        }
+
+        .submit-btn:hover::before { left: 100%; }
+
+        .submit-btn:hover {
+            transform: scale(1.05) translateY(-3px);
+            box-shadow: 0 15px 40px var(--glow-color);
+        }
+
+        .submit-hint {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin-top: 15px;
+            text-align: center;
+        }
+
+        /* 功能展示区 */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 25px;
+            margin-top: 70px;
+        }
+
+        .feature-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 18px;
+            padding: 32px;
+            text-align: center;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .feature-card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, var(--primary), transparent);
+            transform: scaleX(0);
+            transition: transform 0.4s;
+        }
+
+        .feature-card:hover::after { transform: scaleX(1); }
+
+        .feature-card:hover {
+            transform: translateY(-8px);
+            border-color: var(--primary);
+            box-shadow: 0 20px 50px var(--glow-color);
+        }
+
+        .feature-icon {
+            width: 65px;
+            height: 65px;
+            background: var(--glow-color);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            transition: all 0.3s;
+        }
+
+        .feature-card:hover .feature-icon {
+            background: linear-gradient(135deg, var(--primary), var(--primary-light));
+            transform: rotateY(180deg);
+        }
+
+        .feature-icon i { font-size: 26px; color: var(--primary); transition: color 0.3s; }
+
+        .feature-card:hover .feature-icon i { color: #fff; }
+
+        .feature-title {
+            font-family: 'Orbitron', monospace;
+            font-size: 1.1rem;
+            color: var(--text-primary);
+            margin-bottom: 12px;
+            letter-spacing: 1px;
+        }
+
+        .feature-desc {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        /* Footer */
+        .footer {
+            background: var(--bg-main);
+            border-top: 1px solid var(--border-color);
+            padding: 30px;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            transition: all 0.5s ease;
+        }
+
+        .footer span { color: var(--primary); }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .kv-title-main { font-size: 2rem; letter-spacing: 2px; }
+            .kv-subtitle { font-size: 0.9rem; letter-spacing: 2px; }
+            .upload-card { padding: 25px; }
+            .features-grid { grid-template-columns: 1fr; }
+            .theme-toggle { width: 42px; height: 42px; top: 15px; right: 15px; }
+        }
+
+        /* 加载动画 */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s;
+        }
+
+        [data-theme="light"] .loading-overlay { background: rgba(255, 255, 255, 0.95); }
+
+        .loading-overlay.active { opacity: 1; visibility: visible; }
+
+        .loader { text-align: center; }
+
+        .loader-ring {
+            width: 80px;
+            height: 80px;
+            border: 3px solid var(--glow-color);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .loader-text {
+            font-family: 'Orbitron', monospace;
+            color: var(--primary);
+            font-size: 1.1rem;
+            letter-spacing: 3px;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="card">
-            <div class="card-header text-center">
-                <h2>🎵 音频时间序列分析系统</h2>
-                <p class="mb-0">支持波形分析、频谱分析、时间序列预测与频带可预测性分析</p>
-            </div>
-            <div class="card-body p-6">
-                <form method="POST" enctype="multipart/form-data">
-                    <!-- Audio File 1 -->
-                    <div class="form-group">
-                        <label for="audio1">📁 音频文件 1 (WAV/MP3)</label>
-                        <div class="file-input" onclick="document.getElementById('audio1').click()">
-                            <div class="file-icon">🎧</div>
-                            <span id="audio1-name">点击选择文件或直接拖放</span>
-                            <input type="file" id="audio1" name="audio1" accept=".wav,.mp3" 
-                                   onchange="document.getElementById('audio1-name').textContent = this.files[0].name">
-                        </div>
-                    </div>
-                    
-                    <!-- Audio File 2 (Optional) -->
-                    <div class="form-group">
-                        <label for="audio2">📁 音频文件 2 (可选，用于DTW对比分析)</label>
-                        <div class="file-input" onclick="document.getElementById('audio2').click()">
-                            <div class="file-icon">🎶</div>
-                            <span id="audio2-name">点击选择文件或留空</span>
-                            <input type="file" id="audio2" name="audio2" accept=".wav,.mp3"
-                                   onchange="document.getElementById('audio2-name').textContent = this.files[0].name">
-                        </div>
-                    </div>
-                    
-                    <!-- Parameters -->
-                    <div class="param-group">
-                        <h5>⚙️ 分析参数</h5>
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="forecast_horizon">预测步数</label>
-                                    <input type="number" class="form-control" id="forecast_horizon" 
-                                           name="forecast_horizon" value="20" min="5" max="100">
-                                </div>
+    <!-- 主题切换按钮 -->
+    <button class="theme-toggle" onclick="toggleTheme()" title="切换主题">
+        <i class="fas fa-moon" id="themeIcon"></i>
+    </button>
+
+    <!-- KV区 -->
+    <section class="kv-section">
+        <div class="kv-bg-particles" id="particles"></div>
+        
+        <div class="wave-line"></div>
+        <div class="wave-line"></div>
+        <div class="wave-line"></div>
+        <div class="wave-line"></div>
+        
+        <div class="kv-glow-orb orange"></div>
+        <div class="kv-glow-orb orange2"></div>
+        
+        <div class="kv-content">
+            <h1 class="kv-title-main">Audio Lab</h1>
+            <p class="kv-subtitle">Time Series Analysis System (demo)</p>
+            <p class="kv-tagline">音频时间序列分析与预测平台</p>
+        </div>
+        
+        <div class="scroll-indicator">
+            <i class="fas fa-chevron-down"></i>
+        </div>
+    </section>
+
+    <!-- 主内容区 -->
+    <section class="main-section">
+        <div class="main-container">
+            <h2 class="section-title">分析中心</h2>
+            
+            <div class="upload-card">
+                <form method="POST" enctype="multipart/form-data" id="analysisForm">
+                    <!-- 音频文件1 -->
+                    <div style="margin-bottom: 28px;">
+                        <label class="form-label-custom">
+                            <i class="fas fa-music"></i> 主音频文件
+                        </label>
+                        <div class="file-upload-zone" onclick="document.getElementById('audio1').click()">
+                            <div class="file-icon-wrapper">
+                                <i class="fas fa-headphones-alt"></i>
                             </div>
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="n_mels">Mel频段数</label>
-                                    <input type="number" class="form-control" id="n_mels" 
-                                           name="n_mels" value="128" min="32" max="256">
-                                </div>
+                            <p class="file-text" id="audio1-name">点击选择文件或拖拽到此处</p>
+                            <input type="file" id="audio1" name="audio1" accept=".wav,.mp3,.flac"
+                                   onchange="updateFileName('audio1')">
+                        </div>
+                    </div>
+
+                    <!-- 音频文件2 -->
+                    <div style="margin-bottom: 28px;">
+                        <label class="form-label-custom">
+                            <i class="fas fa-microphone"></i> 副音频文件（可选）
+                        </label>
+                        <div class="file-upload-zone" onclick="document.getElementById('audio2').click()">
+                            <div class="file-icon-wrapper">
+                                <i class="fas fa-wave-square"></i>
+                            </div>
+                            <p class="file-text" id="audio2-name">可选，用于DTW对比分析</p>
+                            <input type="file" id="audio2" name="audio2" accept=".wav,.mp3,.flac"
+                                   onchange="updateFileName('audio2')">
+                        </div>
+                    </div>
+
+                    <!-- 参数设置 -->
+                    <div class="params-panel">
+                        <h4 class="params-header"><i class="fas fa-sliders-h"></i> 参数设置</h4>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+                            <div>
+                                <label class="form-label-custom" style="font-size: 0.9rem;">
+                                    预测步长
+                                </label>
+                                <input type="number" class="custom-input" id="forecast_horizon"
+                                       name="forecast_horizon" value="20" min="5" max="100">
+                                <small style="color: var(--text-secondary); font-size: 0.8rem;">未来预测的时间步数 (5-100)</small>
+                            </div>
+                            <div>
+                                <label class="form-label-custom" style="font-size: 0.9rem;">
+                                    Mel频带数
+                                </label>
+                                <input type="number" class="custom-input" id="n_mels"
+                                       name="n_mels" value="128" min="32" max="256">
+                                <small style="color: var(--text-secondary); font-size: 0.8rem;">频谱分析的Mel滤波器数量 (32-256)</small>
                             </div>
                         </div>
                     </div>
-                    
-                    <!-- Submit Button -->
-                    <div class="text-center">
-                        <button type="submit" class="btn btn-primary btn-lg">
-                            🚀 开始分析
+
+                    <!-- 提交按钮 -->
+                    <div style="text-align: center;">
+                        <button type="submit" class="submit-btn" id="submitBtn">
+                            <i class="fas fa-rocket"></i> 开始分析
                         </button>
-                        <p class="text-muted mt-3">分析可能需要1-2分钟，请耐心等待...</p>
+                        <p class="submit-hint">分析过程可能需要1-2分钟，请耐心等待...</p>
                     </div>
                 </form>
             </div>
-        </div>
-        
-        <!-- Features Info -->
-        <div class="card mt-4">
-            <div class="card-body">
-                <h4>📊 系统功能</h4>
-                <div class="row">
-                    <div class="col-md-4 text-center">
-                        <div class="p-3">
-                            <span class="text-2xl">🎤</span>
-                            <h5>特征提取</h5>
-                            <p class="text-sm text-muted">波形、FFT、STFT、Mel频谱、MFCC</p>
-                        </div>
+
+            <!-- 功能展示 -->
+            <h2 class="section-title" style="margin-top: 90px;">功能特性</h2>
+            
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-chart-area"></i>
                     </div>
-                    <div class="col-md-4 text-center">
-                        <div class="p-3">
-                            <span class="text-2xl">📈</span>
-                            <h5>时序分析</h5>
-                            <p class="text-sm text-muted">ACF、PACF、周期性、复杂度分析</p>
-                        </div>
+                    <h4 class="feature-title">特征提取</h4>
+                    <p class="feature-desc">波形 · 频谱 · 短时傅里叶变换<br>Mel频谱图 · MFCC系数</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-project-diagram"></i>
                     </div>
-                    <div class="col-md-4 text-center">
-                        <div class="p-3">
-                            <span class="text-2xl">🔮</span>
-                            <h5>模型预测</h5>
-                            <p class="text-sm text-muted">ARIMA、HMM、LSTM、Transformer</p>
-                        </div>
+                    <h4 class="feature-title">时序分析</h4>
+                    <p class="feature-desc">自相关/偏自相关函数<br>周期性检测 · 复杂度分析</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-brain"></i>
                     </div>
+                    <h4 class="feature-title">模型预测</h4>
+                    <p class="feature-desc">ARIMA · HMM · LSTM<br>Transformer (GPU加速)</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-broadcast-tower"></i>
+                    </div>
+                    <h4 class="feature-title">频带分析</h4>
+                    <p class="feature-desc">低/中/高频带分割<br>可预测性排名评估</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-link"></i>
+                    </div>
+                    <h4 class="feature-title">DTW对比</h4>
+                    <p class="feature-desc">双音频动态时间规整<br>相似度计算与对齐</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-image"></i>
+                    </div>
+                    <h4 class="feature-title">可视化报告</h4>
+                    <p class="feature-desc">交互式图表展示<br>完整的分析结果报告</p>
                 </div>
             </div>
         </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <p><span>AUDIO LAB</span> — 音频时间序列分析系统 | 基于 Python & Flask 构建</p>
+    </footer>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loader">
+            <div class="loader-ring"></div>
+            <p class="loader-text">正在分析中...</p>
+        </div>
     </div>
-    
+
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    
+    <script>
+        // 主题切换功能
+        function toggleTheme() {
+            const body = document.body;
+            const icon = document.getElementById('themeIcon');
+            const currentTheme = body.getAttribute('data-theme');
+            
+            if (currentTheme === 'light') {
+                body.removeAttribute('data-theme');
+                icon.className = 'fas fa-moon';
+                localStorage.setItem('theme', 'dark');
+            } else {
+                body.setAttribute('data-theme', 'light');
+                icon.className = 'fas fa-sun';
+                localStorage.setItem('theme', 'light');
+            }
+        }
+
+        // 初始化主题
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme === 'light') {
+            document.body.setAttribute('data-theme', 'light');
+            document.getElementById('themeIcon').className = 'fas fa-sun';
+        }
+
+        // 生成粒子
+        function createParticles() {
+            const container = document.getElementById('particles');
+            for (let i = 0; i < 50; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.top = Math.random() * 100 + '%';
+                particle.style.animationDelay = Math.random() * 8 + 's';
+                particle.style.animationDuration = (Math.random() * 6 + 6) + 's';
+                
+                const size = Math.random() * 4 + 2;
+                particle.style.width = size + 'px';
+                particle.style.height = size + 'px';
+                
+                container.appendChild(particle);
+            }
+        }
+
+        createParticles();
+
+        // 文件名更新
+        function updateFileName(inputId) {
+            const input = document.getElementById(inputId);
+            const label = document.getElementById(inputId + '-name');
+            if (input.files && input.files[0]) {
+                label.textContent = input.files[0].name;
+                label.style.color = getComputedStyle(document.documentElement).getPropertyValue('--primary');
+                label.style.fontWeight = '600';
+            }
+        }
+
+        // 表单提交动画
+        document.getElementById('analysisForm').addEventListener('submit', function(e) {
+            document.getElementById('loadingOverlay').classList.add('active');
+        });
+
+        // 平滑滚动
+        document.querySelector('.scroll-indicator').addEventListener('click', function() {
+            document.querySelector('.main-section').scrollIntoView({ behavior: 'smooth' });
+        });
+
+        // 卡片入场动画
+        const observerOptions = { threshold: 0.1, rootMargin: '0px 0px -50px 0px' };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.feature-card').forEach((card, index) => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(30px)';
+            card.style.transition = `all 0.6s ease ${index * 0.1}s`;
+            observer.observe(card);
+        });
+
+        // 鼠标跟随光效
+        document.addEventListener('mousemove', function(e) {
+            const orbs = document.querySelectorAll('.kv-glow-orb');
+            orbs.forEach((orb, index) => {
+                const speed = index === 0 ? 0.02 : 0.01;
+                const x = (window.innerWidth / 2 - e.clientX) * speed;
+                const y = (window.innerHeight / 2 - e.clientY) * speed;
+                orb.style.transform = `translate(${x}px, ${y}px)`;
+            });
+        });
+    </script>
 </body>
 </html>

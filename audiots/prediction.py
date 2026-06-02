@@ -30,16 +30,22 @@ def predict_arima(series, forecast_horizon=10):
         from statsmodels.tsa.arima.model import ARIMA
         from statsmodels.tsa.stattools import adfuller
 
-        # Handle short series case
-        if len(series) < forecast_horizon + 10:
-            return np.zeros(forecast_horizon), {'RMSE': np.nan, 'MAE': np.nan, 'MSE': np.nan, 'error': 'Series too short'}
+        series_len = len(series)
+        
+        # Handle short series case - relaxed constraints
+        min_total_len = forecast_horizon + 5  # Reduced from 10 to 5
+        if series_len < min_total_len:
+            return np.zeros(forecast_horizon), {'RMSE': np.nan, 'MAE': np.nan, 'MSE': np.nan, 
+                                                'error': f'Series too short ({series_len} < {min_total_len})'}
 
         train_size = int(len(series) * 0.8)
         if train_size < forecast_horizon:
             train_size = len(series) - forecast_horizon - 1
             
-        if train_size < 20:
-            return np.zeros(forecast_horizon), {'RMSE': np.nan, 'MAE': np.nan, 'MSE': np.nan, 'error': 'Insufficient training data'}
+        min_train_size = max(10, forecast_horizon)  # Reduced from 20 to max(10, forecast_horizon)
+        if train_size < min_train_size:
+            return np.zeros(forecast_horizon), {'RMSE': np.nan, 'MAE': np.nan, 'MSE': np.nan, 
+                                                'error': f'Insufficient training data (train_size={train_size} < {min_train_size})'}
 
         train = series[:train_size]
         test = series[train_size:train_size + forecast_horizon]
@@ -51,25 +57,27 @@ def predict_arima(series, forecast_horizon=10):
         except:
             d = 1
 
-        # Expanded order search space
+        # Expanded order search space with simpler models first
         orders = [
-            (1, d, 1), (1, d, 2), (2, d, 1), (2, d, 2),
+            (1, d, 1), (1, d, 0), (0, d, 1),  # Simpler models first
+            (1, d, 2), (2, d, 1), (2, d, 2),
             (3, d, 1), (3, d, 2), (3, d, 3),
             (4, d, 1), (4, d, 2),
-            (1, d, 0), (0, d, 1)  # Simpler models as fallback
+            (0, d, 0), (2, d, 0), (0, d, 2)   # Additional simple models
         ]
 
         best_forecast = None
         best_metrics = None
         best_aic = np.inf
         best_bic = np.inf
+        last_error = None
 
         for order in orders:
             try:
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
                     model = ARIMA(train, order=order)
-                    fitted = model.fit(disp=0, method_kwargs={'maxiter': 200})
+                    fitted = model.fit(method_kwargs={'maxiter': 500})
 
                     current_aic = fitted.aic
                     current_bic = fitted.bic
@@ -86,18 +94,20 @@ def predict_arima(series, forecast_horizon=10):
                         else:
                             best_metrics = {'RMSE': np.nan, 'MAE': np.nan, 'MSE': np.nan}
             except Exception as e:
+                last_error = str(e)
                 continue
 
         if best_forecast is None:
             # Fallback: use simple moving average if ARIMA fails
-            fallback_forecast = np.full(forecast_horizon, np.mean(train[-10:]))
-            return fallback_forecast, {'RMSE': np.nan, 'MAE': np.nan, 'MSE': np.nan, 'method': 'fallback_mean'}
+            fallback_forecast = np.full(forecast_horizon, np.mean(train[-5:]) if len(train) >= 5 else np.mean(train))
+            return fallback_forecast, {'RMSE': np.nan, 'MAE': np.nan, 'MSE': np.nan, 
+                                        'method': 'fallback_mean', 'error': last_error if last_error else 'All ARIMA orders failed'}
 
         return best_forecast, best_metrics
 
     except Exception as e:
         # Fallback to simple prediction on any error
-        fallback_forecast = np.full(forecast_horizon, np.mean(series[-10:]) if len(series) >= 10 else 0)
+        fallback_forecast = np.full(forecast_horizon, np.mean(series[-5:]) if len(series) >= 5 else 0)
         return fallback_forecast, {'RMSE': np.nan, 'MAE': np.nan, 'MSE': np.nan, 'error': str(e)}
 
 

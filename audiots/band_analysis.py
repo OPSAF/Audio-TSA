@@ -116,3 +116,26 @@ def get_predictability_rank(summary):
         })
 
     return ranks
+
+
+def print_band_summary(summary):
+    """Print a formatted summary of band prediction results."""
+    print("\n[Band Analysis Summary]")
+    print("-" * 50)
+    print(f"  {'Band':<12} {'Avg RMSE':<12} {'Avg MAE':<12} {'Best Model':<12}")
+    print("-" * 50)
+    
+    for band_key, data in summary.items():
+        rmse_str = f"{data['avg_rmse']:.4f}" if not np.isnan(data['avg_rmse']) else "N/A"
+        mae_str = f"{data['avg_mae']:.4f}" if not np.isnan(data['avg_mae']) else "N/A"
+        best_model = data['best_model'] if data['best_model'] else "N/A"
+        print(f"  {data['name']:<12} {rmse_str:<12} {mae_str:<12} {best_model:<12}")
+    
+    print("-" * 50)
+    
+    # Print predictability ranking
+    ranks = get_predictability_rank(summary)
+    if ranks:
+        print("\n[Predictability Ranking]")
+        for rank in ranks:
+            print(f"  #{rank['rank']} {rank['band']} (RMSE: {rank['avg_rmse']:.4f})")
