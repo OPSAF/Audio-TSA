@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>分析结果 - 音频时间序列分析系统</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f7fa;
+        }
+        .card {
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .card-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: bold;
+        }
+        .btn-back {
+            background: #6c757d;
+            border: none;
+            border-radius: 20px;
+            padding: 8px 25px;
+        }
+        .btn-back:hover {
+            background: #5a6268;
+        }
+        .plot-container {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        .plot-container img {
+            width: 100%;
+            border-radius: 8px;
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+        }
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        .metrics-table {
+            font-size: 0.9rem;
+        }
+        .metrics-table th {
+            background: #f8f9fa;
+        }
+        .rank-badge {
+            background: #ffc107;
+            color: #333;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+        .band-card {
+            border-left: 4px solid #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <!-- Header -->
+        <div class="card">
+            <div class="card-header">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h2>🎵 音频时间序列分析结果</h2>
+                        <p class="mb-0">任务ID: {{ task_id }}</p>
+                    </div>
+                    <div class="col-md-4 text-right">
+                        <a href="{{ url_for('index') }}" class="btn btn-back">
+                            ← 返回上传页面
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Audio Info -->
+        <div class="card">
+            <div class="card-header">📋 音频信息</div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="stat-card">
+                            <div class="stat-value">{{ results['params']['audio1_name'] }}</div>
+                            <div class="stat-label">文件名</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-card">
+                            <div class="stat-value">{{ results['audio_info']['duration']|round(2) }}s</div>
+                            <div class="stat-label">时长</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-card">
+                            <div class="stat-value">{{ results['audio_info']['sample_rate'] }}</div>
+                            <div class="stat-label">采样率 (Hz)</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-card">
+                            <div class="stat-value">{{ results['params']['forecast_horizon'] }}</div>
+                            <div class="stat-label">预测步数</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Time Series Analysis -->
+        <div class="card">
+            <div class="card-header">📈 时间序列分析</div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5>周期性分析</h5>
+                        <p><strong>主频率:</strong> {{ results['periodicity']['dominant_frequency']|round(2) }} Hz</p>
+                        <p><strong>主周期:</strong> {{ results['periodicity']['dominant_period_seconds']|round(4) }} s</p>
+                        <p><strong>ACF峰值:</strong> {{ results['periodicity']['acf_peaks']|length }} 个显著峰值</p>
+                    </div>
+                    <div class="col-md-6">
+                        <h5>复杂度分析</h5>
+                        <p><strong>过零率:</strong> {{ results['complexity']['zero_crossing_rate']|round(4) }}</p>
+                        <p><strong>样本熵:</strong> {{ results['complexity']['sample_entropy']|round(4) }}</p>
+                        <p><strong>频谱平坦度:</strong> {{ results['spectral_flatness']|round(4) }} (0=音调, 1=噪声)</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Visualizations -->
+        <div class="card">
+            <div class="card-header">🎨 可视化结果</div>
+            <div class="card-body">
+                <!-- Waveform & FFT -->
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="plot-container">
+                            <h5>音频波形</h5>
+                            <img src="{{ plot_urls.get('waveform', '') }}" alt="Waveform">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="plot-container">
+                            <h5>FFT频谱</h5>
+                            <img src="{{ plot_urls.get('fft_spectrum', '') }}" alt="FFT Spectrum">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Mel Spectrogram -->
+                <div class="plot-container">
+                    <h5>Mel频谱图</h5>
+                    <img src="{{ plot_urls.get('mel_spectrogram', '') }}" alt="Mel Spectrogram">
+                </div>
+                
+                <!-- ACF/PACF -->
+                <div class="plot-container">
+                    <h5>ACF/PACF分析</h5>
+                    <img src="{{ plot_urls.get('acf_pacf', '') }}" alt="ACF/PACF">
+                </div>
+            </div>
+        </div>
+        
+        <!-- Prediction Results -->
+        <div class="card">
+            <div class="card-header">🔮 模型预测结果</div>
+            <div class="card-body">
+                <div class="plot-container">
+                    <h5>模型预测对比</h5>
+                    <img src="{{ plot_urls.get('prediction_comparison', '') }}" alt="Prediction Comparison">
+                </div>
+                
+                <div class="plot-container">
+                    <h5>模型误差对比</h5>
+                    <img src="{{ plot_urls.get('error_comparison', '') }}" alt="Error Comparison">
+                </div>
+                
+                <!-- Metrics Table -->
+                <div class="table-responsive">
+                    <table class="table table-striped metrics-table">
+                        <thead>
+                            <tr>
+                                <th>模型</th>
+                                <th>RMSE</th>
+                                <th>MAE</th>
+                                <th>MSE</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for model, (forecast, metrics, true) in results['predictions'].items() %}
+                            <tr>
+                                <td>{{ model }}</td>
+                                <td>{{ metrics.get('RMSE', 'N/A')|round(4) }}</td>
+                                <td>{{ metrics.get('MAE', 'N/A')|round(4) }}</td>
+                                <td>{{ metrics.get('MSE', 'N/A')|round(4) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Band Analysis -->
+        <div class="card">
+            <div class="card-header">🎯 频带可预测性分析</div>
+            <div class="card-body">
+                <div class="plot-container">
+                    <h5>各频带预测误差</h5>
+                    <img src="{{ plot_urls.get('band_errors', '') }}" alt="Band Errors">
+                </div>
+                
+                <div class="row">
+                    {% for band, data in results['band_summary'].items() %}
+                    <div class="col-md-4">
+                        <div class="card band-card">
+                            <div class="card-body">
+                                <h5>{{ data['name'] }} <span class="rank-badge">RMSE: {{ data['avg_rmse']|round(4) }}</span></h5>
+                                <p><strong>最佳模型:</strong> {{ data['best_model'] or 'N/A' }}</p>
+                                <p><strong>平均MAE:</strong> {{ data['avg_mae']|round(4) }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                <!-- Predictability Rank -->
+                <div class="mt-4">
+                    <h5>🏆 频带可预测性排名</h5>
+                    <ol>
+                        {% for item in results['predictability_rank'] %}
+                        <li><strong>{{ item['band'] }}</strong> - RMSE: {{ item['avg_rmse']|round(4) }} (最佳模型: {{ item['best_model'] }})</li>
+                        {% endfor %}
+                    </ol>
+                </div>
+            </div>
+        </div>
+        
+        <!-- DTW Results (if dual audio) -->
+        {% if results.get('dtw') and not results['dtw'].get('error') %}
+        <div class="card">
+            <div class="card-header">🔗 双音频对比分析 (DTW)</div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>DTW距离:</strong> {{ results['dtw']['distance']|round(4) }}</p>
+                        <p><strong>相似度:</strong> {{ (results['dtw']['similarity'] * 100)|round(2) }}%</p>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="plot-container">
+                            <h5>DTW对齐路径</h5>
+                            <img src="{{ plot_urls.get('dtw_alignment', '') }}" alt="DTW Alignment">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Footer -->
+        <div class="text-center text-muted mt-4 mb-4">
+            <p>音频时间序列分析系统 - 时间序列分析课程项目</p>
+        </div>
+    </div>
+    
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>音频时间序列分析系统</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 800px;
+            margin-top: 50px;
+        }
+        .card {
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        .card-header {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            border-radius: 15px 15px 0 0 !important;
+            color: white;
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 25px;
+            padding: 10px 40px;
+            font-weight: bold;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        .form-group label {
+            font-weight: 600;
+            color: #333;
+        }
+        .file-input {
+            border: 2px dashed #ccc;
+            border-radius: 10px;
+            padding: 30px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .file-input:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+        .file-input input {
+            display: none;
+        }
+        .file-icon {
+            font-size: 48px;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        .param-group {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="card-header text-center">
+                <h2>🎵 音频时间序列分析系统</h2>
+                <p class="mb-0">支持波形分析、频谱分析、时间序列预测与频带可预测性分析</p>
+            </div>
+            <div class="card-body p-6">
+                <form method="POST" enctype="multipart/form-data">
+                    <!-- Audio File 1 -->
+                    <div class="form-group">
+                        <label for="audio1">📁 音频文件 1 (WAV/MP3)</label>
+                        <div class="file-input" onclick="document.getElementById('audio1').click()">
+                            <div class="file-icon">🎧</div>
+                            <span id="audio1-name">点击选择文件或直接拖放</span>
+                            <input type="file" id="audio1" name="audio1" accept=".wav,.mp3" 
+                                   onchange="document.getElementById('audio1-name').textContent = this.files[0].name">
+                        </div>
+                    </div>
+                    
+                    <!-- Audio File 2 (Optional) -->
+                    <div class="form-group">
+                        <label for="audio2">📁 音频文件 2 (可选，用于DTW对比分析)</label>
+                        <div class="file-input" onclick="document.getElementById('audio2').click()">
+                            <div class="file-icon">🎶</div>
+                            <span id="audio2-name">点击选择文件或留空</span>
+                            <input type="file" id="audio2" name="audio2" accept=".wav,.mp3"
+                                   onchange="document.getElementById('audio2-name').textContent = this.files[0].name">
+                        </div>
+                    </div>
+                    
+                    <!-- Parameters -->
+                    <div class="param-group">
+                        <h5>⚙️ 分析参数</h5>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="forecast_horizon">预测步数</label>
+                                    <input type="number" class="form-control" id="forecast_horizon" 
+                                           name="forecast_horizon" value="20" min="5" max="100">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="n_mels">Mel频段数</label>
+                                    <input type="number" class="form-control" id="n_mels" 
+                                           name="n_mels" value="128" min="32" max="256">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Submit Button -->
+                    <div class="text-center">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            🚀 开始分析
+                        </button>
+                        <p class="text-muted mt-3">分析可能需要1-2分钟，请耐心等待...</p>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Features Info -->
+        <div class="card mt-4">
+            <div class="card-body">
+                <h4>📊 系统功能</h4>
+                <div class="row">
+                    <div class="col-md-4 text-center">
+                        <div class="p-3">
+                            <span class="text-2xl">🎤</span>
+                            <h5>特征提取</h5>
+                            <p class="text-sm text-muted">波形、FFT、STFT、Mel频谱、MFCC</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4 text-center">
+                        <div class="p-3">
+                            <span class="text-2xl">📈</span>
+                            <h5>时序分析</h5>
+                            <p class="text-sm text-muted">ACF、PACF、周期性、复杂度分析</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4 text-center">
+                        <div class="p-3">
+                            <span class="text-2xl">🔮</span>
+                            <h5>模型预测</h5>
+                            <p class="text-sm text-muted">ARIMA、HMM、LSTM、Transformer</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+</html>
