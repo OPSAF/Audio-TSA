@@ -22,6 +22,7 @@ from . import loader
 from . import features
 from . import dynamics
 from . import discovery
+from . import unsupervised
 from . import analysis
 from . import prediction
 from . import band_analysis
@@ -31,7 +32,7 @@ from . import similarity_viz
 from . import discovery_viz
 
 __all__ = [
-    'loader', 'features', 'dynamics', 'discovery', 'analysis', 'prediction',
-    'band_analysis', 'visualization', 'similarity', 'similarity_viz',
-    'discovery_viz',
+    'loader', 'features', 'dynamics', 'discovery', 'unsupervised',
+    'analysis', 'prediction', 'band_analysis', 'visualization',
+    'similarity', 'similarity_viz', 'discovery_viz',
 ]

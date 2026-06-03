@@ -20,7 +20,7 @@ import numpy as np
 
 # Import from audiots package
 from audiots import (
-    loader, features, dynamics, discovery, analysis, prediction,
+    loader, features, dynamics, discovery, unsupervised, analysis, prediction,
     band_analysis, visualization, similarity, similarity_viz, discovery_viz
 )
 
@@ -149,46 +149,16 @@ def main():
     print()
 
     # ============================================================
-    # Phase 3: Prediction Models
+    # Phase 3: Unsupervised Pattern Discovery
     # ============================================================
     print("=" * 70)
-    print("  PHASE 3: PREDICTION MODEL COMPARISON")
+    print("  PHASE 3: UNSUPERVISED PATTERN DISCOVERY")
     print("=" * 70)
 
-    forecast_horizon = 20
-    print(f"[Prediction] Forecasting {forecast_horizon} future frames...")
-    print()
-    pred_results = prediction.run_all_predictions(mel_spec, forecast_horizon=forecast_horizon, verbose=True)
-
-    print("\n[Summary] Prediction Model Comparison:")
-    print("-" * 50)
-    print(f"  {'Model':<14} {'RMSE':<12} {'MAE':<12}")
-    print("-" * 50)
-    for model in ['ARIMA', 'HMM', 'LSTM', 'Transformer']:
-        _, metrics, _ = pred_results[model]
-        rmse_str = f"{metrics['RMSE']:.4f}" if not np.isnan(metrics['RMSE']) else "N/A"
-        mae_str = f"{metrics['MAE']:.4f}" if not np.isnan(metrics['MAE']) else "N/A"
-        print(f"  {model:<14} {rmse_str:<12} {mae_str:<12}")
-        if model == 'ARIMA' and 'error' in metrics and metrics['error']:
-            print(f"         Error: {metrics['error']}")
-    print("-" * 50)
-    print()
-
-    # ============================================================
-    # Phase 4: Frequency Band Predictability Analysis
-    # ============================================================
-    print("=" * 70)
-    print("  PHASE 4: FREQUENCY BAND PREDICTABILITY ANALYSIS")
-    print("=" * 70)
-
-    band_results = band_analysis.analyze_band_predictability(
-        mel_spec, forecast_horizon=forecast_horizon, 
-        parallel=True, epochs=15)
-    
-    band_summary = band_analysis.compute_band_error_summary(band_results)
-    band_analysis.print_band_summary(band_summary)
-    band_analysis.print_detailed_band_results(band_results)
-    print()
+    unsup_report = unsupervised.explore_unsupervised(
+        y1, sr, n_components=4, n_clusters=4, verbose=True,
+    )
+    unsupervised.print_unsupervised_report(unsup_report)
 
     # ============================================================
     # Phase 5: Dual Audio Discovery (Multi-Dimensional Exploration)
@@ -267,29 +237,13 @@ def main():
     fig_dict['07_periodicity'] = visualization.plot_periodicity(
         y1, sr, period_info, title="Periodicity Analysis")
 
-    print("  [6.8] Prediction comparison (4 models)...")
-    fig_dict['08_prediction_comparison'] = visualization.plot_prediction_comparison(
-        pred_results, forecast_horizon=forecast_horizon,
-        title="Mel Energy Prediction: Model Comparison")
-
-    print("  [6.9] Model error bar chart...")
-    fig_dict['09_model_error_bars'] = visualization.plot_model_error_comparison(
-        pred_results, title="Prediction Error Comparison Across Models")
-
-    print("  [6.10] Band error heatmap...")
-    fig_dict['10_band_error_heatmap'] = visualization.plot_band_error_heatmap(
-        band_results, title="Frequency Band Prediction Error Heatmap")
-
-    print("  [6.11] Band error bar chart...")
-    fig_dict['11_band_error_bars'] = visualization.plot_band_error_bars(
-        band_results, title="Band-wise Prediction Error Comparison")
-
+    # Legacy prediction & band plots available via prediction module directly
     if dual_audio and dual_results:
-        print("  [6.12] DTW alignment plot...")
+        print("  [6.8] DTW alignment plot...")
         series1_ds = y1[::max(1, len(y1) // 200)]
         series2_ds = y2[::max(1, len(y2) // 200)]
         min_len = min(len(series1_ds), len(series2_ds))
-        fig_dict['12_dtw_alignment'] = visualization.plot_dtw_alignment(
+        fig_dict['08_dtw_alignment'] = visualization.plot_dtw_alignment(
             series1_ds[:min_len], series2_ds[:min_len],
             dual_results.get('dtw_path', []),
             title=f"DTW Alignment (distance={dual_results.get('dtw_distance', 0):.2f})")

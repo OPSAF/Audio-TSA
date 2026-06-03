@@ -6,7 +6,7 @@ import numpy as np
 from flask import Flask, render_template, request, redirect, url_for
 
 # Import our audio analysis package
-from audiots import loader, features, dynamics, discovery, analysis, prediction, band_analysis, visualization
+from audiots import loader, features, dynamics, discovery, unsupervised, analysis, prediction, band_analysis, visualization
 from audiots import similarity, similarity_viz, discovery_viz
 
 app = Flask(__name__, static_folder='static')
@@ -66,10 +66,14 @@ def analyze_audio(filepath1, filepath2=None, forecast_horizon=20, n_mels=128):
     flatness = analysis.compute_spectral_flatness(mag)
     results['spectral_flatness'] = flatness
     
-    # Prediction
+    # Unsupervised pattern discovery (replaces simple prediction)
+    unsup_report = unsupervised.explore_unsupervised(
+        y1, sr, n_components=4, n_clusters=4, verbose=False,
+    )
+    results['unsupervised'] = unsup_report
+
+    # Legacy prediction & band analysis kept for backward compat
     results['predictions'] = prediction.run_all_predictions(mel_spec, forecast_horizon=forecast_horizon, verbose=False)
-    
-    # Band analysis
     band_results = band_analysis.analyze_band_predictability(mel_spec, forecast_horizon=forecast_horizon)
     results['band_results'] = band_results
     results['band_summary'] = band_analysis.compute_band_error_summary(band_results)
@@ -255,6 +259,37 @@ def index():
                     },
                 }
 
+        # Create serializable version of unsupervised report
+        if results.get('unsupervised'):
+            u = results['unsupervised']
+            results['unsupervised_serializable'] = {
+                'n_change_points': len(u.change_points),
+                'change_points': u.change_points,
+                'n_segments': len(u.segments),
+                'segments': [
+                    {'start': s.start, 'end': s.end, 'label': s.label,
+                     'character': s.character}
+                    for s in u.segments
+                ],
+                'n_motifs': len(u.motifs),
+                'motifs': [
+                    {'length': m.length_seconds, 'n_occurrences': len(m.occurrences),
+                     'significance': m.significance, 'description': m.description}
+                    for m in u.motifs
+                ],
+                'n_spectral_components': u.n_components,
+                'spectral_components': [
+                    {'character': sc.character, 'weight': sc.weight}
+                    for sc in u.spectral_components
+                ],
+                'reconstruction_error': u.reconstruction_error,
+                'determinism': u.determinism,
+                'laminarity': u.laminarity,
+                'recurrence_interpretation': u.recurrence_interpretation,
+                'silhouette_score': u.silhouette_score,
+                'overview': u.overview,
+            }
+
         # Store results
         results['task_id'] = task_id
         results['plot_files'] = plot_files
@@ -268,7 +303,7 @@ def index():
         # Save results to JSON (strip internal/large data first)
         serializable = {k: v for k, v in results.items()
                         if not k.startswith('_') and k not in (
-                            'similarity', 'discovery',
+                            'similarity', 'discovery', 'unsupervised',
                             'dynamics', 'dynamics_2',
                             'dynamics_segments', 'dynamics_segments_2',
                             'dynamics_similarity',
@@ -277,6 +312,8 @@ def index():
             serializable['similarity'] = results['similarity_serializable']
         if results.get('discovery_serializable'):
             serializable['discovery'] = results['discovery_serializable']
+        if results.get('unsupervised_serializable'):
+            serializable['unsupervised'] = results['unsupervised_serializable']
         if results.get('dynamics_serializable'):
             serializable['dynamics'] = results['dynamics_serializable']
 
