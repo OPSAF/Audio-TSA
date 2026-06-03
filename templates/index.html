@@ -40,7 +40,6 @@
             transition: all 0.5s ease;
         }
 
-        /* 主题切换按钮 */
         .theme-toggle {
             position: fixed;
             top: 20px;
@@ -70,7 +69,6 @@
             transition: all 0.3s ease;
         }
 
-        /* ========== KV区 ========== */
         .kv-section {
             position: relative;
             height: 100vh;
@@ -219,7 +217,6 @@
             60% { transform: translateX(-50%) translateY(-10px); }
         }
 
-        /* ========== 主内容区 ========== */
         .main-section {
             background: var(--bg-main);
             padding: 80px 20px;
@@ -250,7 +247,6 @@
             background: linear-gradient(90deg, transparent, var(--primary), transparent);
         }
 
-        /* 上传卡片 */
         .upload-card {
             background: var(--bg-card);
             border: 1px solid var(--border-color);
@@ -345,7 +341,6 @@
 
         .file-upload-zone:hover .file-text { color: var(--primary); }
 
-        /* 参数区域 */
         .params-panel {
             background: var(--glow-color);
             border: 1px solid var(--border-color);
@@ -363,6 +358,27 @@
             display: flex;
             align-items: center;
             gap: 12px;
+            cursor: pointer;
+        }
+
+        .params-header:hover {
+            color: var(--primary-light);
+        }
+
+        .params-header i {
+            transition: transform 0.3s;
+        }
+
+        .params-header.collapsed i {
+            transform: rotate(-90deg);
+        }
+
+        .params-content {
+            display: block;
+        }
+
+        .params-content.collapsed {
+            display: none;
         }
 
         .custom-input {
@@ -392,7 +408,97 @@
             background: #fff;
         }
 
-        /* 提交按钮 */
+        /* Analysis Options Grid */
+        .analysis-options-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .analysis-option-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 18px;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .analysis-option-item:hover {
+            border-color: var(--primary);
+            background: rgba(255, 107, 0, 0.08);
+        }
+
+        .analysis-option-item.selected {
+            background: rgba(255, 107, 0, 0.15);
+            border-color: var(--primary);
+        }
+
+        .analysis-option-item input[type="checkbox"] {
+            display: none;
+        }
+
+        .analysis-option-check {
+            width: 22px;
+            height: 22px;
+            border: 2px solid var(--border-color);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+            flex-shrink: 0;
+        }
+
+        .analysis-option-item.selected .analysis-option-check {
+            background: var(--primary);
+            border-color: var(--primary);
+        }
+
+        .analysis-option-check i {
+            display: none;
+            color: #fff;
+            font-size: 12px;
+        }
+
+        .analysis-option-item.selected .analysis-option-check i {
+            display: block;
+        }
+
+        .analysis-option-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .analysis-option-name {
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            margin-bottom: 2px;
+        }
+
+        .analysis-option-desc {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .analysis-option-disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .analysis-option-disabled:hover {
+            border-color: var(--border-color);
+            background: rgba(0, 0, 0, 0.2);
+        }
+
         .submit-btn {
             background: linear-gradient(135deg, var(--primary), var(--primary-light));
             color: #fff;
@@ -435,7 +541,6 @@
             text-align: center;
         }
 
-        /* 功能展示区 */
         .features-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -510,7 +615,6 @@
             line-height: 1.6;
         }
 
-        /* Footer */
         .footer {
             background: var(--bg-main);
             border-top: 1px solid var(--border-color);
@@ -523,16 +627,15 @@
 
         .footer span { color: var(--primary); }
 
-        /* 响应式 */
         @media (max-width: 768px) {
             .kv-title-main { font-size: 2rem; letter-spacing: 2px; }
             .kv-subtitle { font-size: 0.9rem; letter-spacing: 2px; }
             .upload-card { padding: 25px; }
             .features-grid { grid-template-columns: 1fr; }
             .theme-toggle { width: 42px; height: 42px; top: 15px; right: 15px; }
+            .analysis-options-grid { grid-template-columns: 1fr; }
         }
 
-        /* 加载动画 */
         .loading-overlay {
             position: fixed;
             top: 0;
@@ -576,12 +679,10 @@
     </style>
 </head>
 <body>
-    <!-- 主题切换按钮 -->
     <button class="theme-toggle" onclick="toggleTheme()" title="切换主题">
         <i class="fas fa-moon" id="themeIcon"></i>
     </button>
 
-    <!-- KV区 -->
     <section class="kv-section">
         <div class="kv-bg-particles" id="particles"></div>
         
@@ -604,14 +705,12 @@
         </div>
     </section>
 
-    <!-- 主内容区 -->
     <section class="main-section">
         <div class="main-container">
             <h2 class="section-title">分析中心</h2>
             
             <div class="upload-card">
                 <form method="POST" enctype="multipart/form-data" id="analysisForm">
-                    <!-- 音频文件1 -->
                     <div style="margin-bottom: 28px;">
                         <label class="form-label-custom">
                             <i class="fas fa-music"></i> 主音频文件
@@ -622,11 +721,10 @@
                             </div>
                             <p class="file-text" id="audio1-name">点击选择文件或拖拽到此处</p>
                             <input type="file" id="audio1" name="audio1" accept=".wav,.mp3,.flac"
-                                   onchange="updateFileName('audio1')">
+                                   onchange="updateFileName('audio1'); updateComparisonOption()">
                         </div>
                     </div>
 
-                    <!-- 音频文件2 -->
                     <div style="margin-bottom: 28px;">
                         <label class="form-label-custom">
                             <i class="fas fa-microphone"></i> 副音频文件（可选）
@@ -635,36 +733,69 @@
                             <div class="file-icon-wrapper">
                                 <i class="fas fa-wave-square"></i>
                             </div>
-                            <p class="file-text" id="audio2-name">可选，用于DTW对比分析</p>
+                            <p class="file-text" id="audio2-name">可选，用于对比分析</p>
                             <input type="file" id="audio2" name="audio2" accept=".wav,.mp3,.flac"
-                                   onchange="updateFileName('audio2')">
+                                   onchange="updateFileName('audio2'); updateComparisonOption()">
                         </div>
                     </div>
 
-                    <!-- 参数设置 -->
                     <div class="params-panel">
-                        <h4 class="params-header"><i class="fas fa-sliders-h"></i> 参数设置</h4>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
-                            <div>
-                                <label class="form-label-custom" style="font-size: 0.9rem;">
-                                    预测步长
-                                </label>
-                                <input type="number" class="custom-input" id="forecast_horizon"
-                                       name="forecast_horizon" value="20" min="5" max="100">
-                                <small style="color: var(--text-secondary); font-size: 0.8rem;">未来预测的时间步数 (5-100)</small>
-                            </div>
-                            <div>
-                                <label class="form-label-custom" style="font-size: 0.9rem;">
-                                    Mel频带数
-                                </label>
-                                <input type="number" class="custom-input" id="n_mels"
-                                       name="n_mels" value="128" min="32" max="256">
-                                <small style="color: var(--text-secondary); font-size: 0.8rem;">频谱分析的Mel滤波器数量 (32-256)</small>
+                        <h4 class="params-header" onclick="toggleParamsPanel()">
+                            <i class="fas fa-chevron-right"></i> 参数设置
+                        </h4>
+                        <div class="params-content" id="paramsContent">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+                                <div>
+                                    <label class="form-label-custom" style="font-size: 0.9rem;">
+                                        预测步长
+                                    </label>
+                                    <input type="number" class="custom-input" id="forecast_horizon"
+                                           name="forecast_horizon" value="20" min="5" max="100">
+                                    <small style="color: var(--text-secondary); font-size: 0.8rem;">未来预测的时间步数 (5-100)</small>
+                                </div>
+                                <div>
+                                    <label class="form-label-custom" style="font-size: 0.9rem;">
+                                        Mel频带数
+                                    </label>
+                                    <input type="number" class="custom-input" id="n_mels"
+                                           name="n_mels" value="128" min="32" max="256">
+                                    <small style="color: var(--text-secondary); font-size: 0.8rem;">频谱分析的Mel滤波器数量 (32-256)</small>
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- 提交按钮 -->
+                    <div class="params-panel">
+                        <h4 class="params-header" onclick="toggleAnalysisPanel()">
+                            <i class="fas fa-chevron-right"></i> 分析选项
+                        </h4>
+                        <div class="params-content" id="analysisContent">
+                            <div class="analysis-options-grid" id="analysisOptionsGrid">
+                                {% for opt in analysis_options %}
+                                <div 
+                                    class="analysis-option-item {% if opt.default %}selected{% endif %} {% if opt.id == 'comparison' %}analysis-option-disabled{% endif %}"
+                                    id="option_{{ opt.id }}"
+                                    onclick="toggleAnalysisOption('{{ opt.id }}')"
+                                >
+                                    <input type="checkbox" 
+                                           name="analysis_{{ opt.id }}" 
+                                           id="checkbox_{{ opt.id }}"
+                                           {% if opt.default %}checked{% endif %}
+                                           {% if opt.id == 'comparison' %}disabled{% endif %}
+                                    >
+                                    <div class="analysis-option-check">
+                                        <i class="fas fa-check"></i>
+                                    </div>
+                                    <div class="analysis-option-info">
+                                        <div class="analysis-option-name">{{ opt.name }}</div>
+                                        <div class="analysis-option-desc">{{ opt.description }}</div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
                     <div style="text-align: center;">
                         <button type="submit" class="submit-btn" id="submitBtn">
                             <i class="fas fa-rocket"></i> 开始分析
@@ -674,7 +805,6 @@
                 </form>
             </div>
 
-            <!-- 功能展示 -->
             <h2 class="section-title" style="margin-top: 90px;">功能特性</h2>
             
             <div class="features-grid">
@@ -714,8 +844,8 @@
                     <div class="feature-icon">
                         <i class="fas fa-link"></i>
                     </div>
-                    <h4 class="feature-title">DTW对比</h4>
-                    <p class="feature-desc">双音频动态时间规整<br>相似度计算与对齐</p>
+                    <h4 class="feature-title">双音频对比</h4>
+                    <p class="feature-desc">多维探索分析<br>相似度检测与匹配</p>
                 </div>
 
                 <div class="feature-card">
@@ -729,12 +859,10 @@
         </div>
     </section>
 
-    <!-- Footer -->
     <footer class="footer">
         <p><span>AUDIO LAB</span> — 音频时间序列分析系统 | 基于 Python & Flask 构建</p>
     </footer>
 
-    <!-- Loading Overlay -->
     <div class="loading-overlay" id="loadingOverlay">
         <div class="loader">
             <div class="loader-ring"></div>
@@ -745,7 +873,6 @@
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
     
     <script>
-        // 主题切换功能
         function toggleTheme() {
             const body = document.body;
             const icon = document.getElementById('themeIcon');
@@ -762,14 +889,12 @@
             }
         }
 
-        // 初始化主题
         const savedTheme = localStorage.getItem('theme');
         if (savedTheme === 'light') {
             document.body.setAttribute('data-theme', 'light');
             document.getElementById('themeIcon').className = 'fas fa-sun';
         }
 
-        // 生成粒子
         function createParticles() {
             const container = document.getElementById('particles');
             for (let i = 0; i < 50; i++) {
@@ -790,7 +915,6 @@
 
         createParticles();
 
-        // 文件名更新
         function updateFileName(inputId) {
             const input = document.getElementById(inputId);
             const label = document.getElementById(inputId + '-name');
@@ -801,17 +925,57 @@
             }
         }
 
-        // 表单提交动画
+        function updateComparisonOption() {
+            const audio2 = document.getElementById('audio2');
+            const hasAudio2 = audio2.files && audio2.files.length > 0;
+            const option = document.getElementById('option_comparison');
+            const checkbox = document.getElementById('checkbox_comparison');
+            
+            if (hasAudio2) {
+                option.classList.remove('analysis-option-disabled');
+                checkbox.disabled = false;
+                checkbox.checked = true;
+                option.classList.add('selected');
+            } else {
+                option.classList.add('analysis-option-disabled');
+                checkbox.disabled = true;
+                checkbox.checked = false;
+                option.classList.remove('selected');
+            }
+        }
+
+        function toggleAnalysisOption(optId) {
+            const option = document.getElementById('option_' + optId);
+            const checkbox = document.getElementById('checkbox_' + optId);
+            
+            if (checkbox.disabled) return;
+            
+            option.classList.toggle('selected');
+            checkbox.checked = !checkbox.checked;
+        }
+
+        function toggleParamsPanel() {
+            const header = document.querySelector('.params-panel:nth-child(3) .params-header');
+            const content = document.getElementById('paramsContent');
+            header.classList.toggle('collapsed');
+            content.classList.toggle('collapsed');
+        }
+
+        function toggleAnalysisPanel() {
+            const header = document.querySelector('.params-panel:nth-child(4) .params-header');
+            const content = document.getElementById('analysisContent');
+            header.classList.toggle('collapsed');
+            content.classList.toggle('collapsed');
+        }
+
         document.getElementById('analysisForm').addEventListener('submit', function(e) {
             document.getElementById('loadingOverlay').classList.add('active');
         });
 
-        // 平滑滚动
         document.querySelector('.scroll-indicator').addEventListener('click', function() {
             document.querySelector('.main-section').scrollIntoView({ behavior: 'smooth' });
         });
 
-        // 卡片入场动画
         const observerOptions = { threshold: 0.1, rootMargin: '0px 0px -50px 0px' };
 
         const observer = new IntersectionObserver((entries) => {
@@ -830,7 +994,6 @@
             observer.observe(card);
         });
 
-        // 鼠标跟随光效
         document.addEventListener('mousemove', function(e) {
             const orbs = document.querySelectorAll('.kv-glow-orb');
             orbs.forEach((orb, index) => {

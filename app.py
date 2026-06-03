@@ -1,9 +1,14 @@
 """Flask Web Application for Audio Time Series Analysis."""
 
 import os
+import sys
 import uuid
+import json
+import time
+import threading
 import numpy as np
-from flask import Flask, render_template, request, redirect, url_for
+from queue import Queue
+from flask import Flask, render_template, request, redirect, url_for, Response, stream_with_context
 
 # Import our audio analysis package
 from audiots import loader, features, dynamics, discovery, unsupervised, analysis, prediction, band_analysis, visualization
@@ -16,98 +21,276 @@ app.config['OUTPUT_FOLDER'] = 'static/outputs'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['OUTPUT_FOLDER'], exist_ok=True)
 
+# Store for analysis progress
+analysis_progress = {}
 
-def analyze_audio(filepath1, filepath2=None, forecast_horizon=20, n_mels=128):
-    """Perform complete audio analysis."""
+# Available analysis options
+ANALYSIS_OPTIONS = [
+    {'id': 'features', 'name': '特征提取', 'description': '波形、频谱、STFT、Mel、MFCC', 'default': True},
+    {'id': 'dynamics', 'name': '动态趋势分析', 'description': '能量、亮度、复杂度、节奏', 'default': True},
+    {'id': 'timeseries', 'name': '时序分析', 'description': 'ACF、PACF、周期性、复杂度', 'default': True},
+    {'id': 'unsupervised', 'name': '无监督模式发现', 'description': '聚类、 motif检测', 'default': True},
+    {'id': 'prediction', 'name': '机器学习预测', 'description': 'ARIMA、HMM、LSTM、Transformer', 'default': True},
+    {'id': 'band', 'name': '频带分析', 'description': '频率带可预测性评估', 'default': True},
+    {'id': 'comparison', 'name': '双音频对比', 'description': '相似度分析、多维探索', 'default': False},
+    {'id': 'visualization', 'name': '可视化', 'description': '生成分析图表', 'default': True},
+]
+
+
+def parse_analysis_options(form_data, has_dual_audio):
+    """Parse analysis options from form data."""
+    selected = []
+    
+    for opt in ANALYSIS_OPTIONS:
+        key = f'analysis_{opt["id"]}'
+        if key in form_data and form_data[key] == 'on':
+            selected.append(opt['id'])
+    
+    # Handle comparison option - only available with dual audio
+    if 'comparison' in selected and not has_dual_audio:
+        selected.remove('comparison')
+    
+    # If no options selected, use defaults
+    if not selected:
+        for opt in ANALYSIS_OPTIONS:
+            if opt['default']:
+                if opt['id'] == 'comparison' and not has_dual_audio:
+                    continue
+                selected.append(opt['id'])
+    
+    return selected
+
+
+def log_progress(task_id, message, level='info'):
+    """Log progress message for a task."""
+    if task_id not in analysis_progress:
+        analysis_progress[task_id] = {'logs': [], 'status': 'running', 'progress': 0}
+    
+    timestamp = time.strftime('%H:%M:%S')
+    analysis_progress[task_id]['logs'].append({
+        'time': timestamp,
+        'message': message,
+        'level': level
+    })
+    
+    # Keep only last 100 logs
+    if len(analysis_progress[task_id]['logs']) > 100:
+        analysis_progress[task_id]['logs'] = analysis_progress[task_id]['logs'][-100:]
+
+
+def update_progress(task_id, progress, status=None):
+    """Update progress percentage for a task."""
+    if task_id not in analysis_progress:
+        analysis_progress[task_id] = {'logs': [], 'status': 'running', 'progress': 0}
+    
+    analysis_progress[task_id]['progress'] = progress
+    if status:
+        analysis_progress[task_id]['status'] = status
+
+
+def analyze_audio_with_progress(task_id, filepath1, filepath2=None, forecast_horizon=20, n_mels=128, analysis_options=None):
+    """Perform complete audio analysis with progress logging."""
+    if analysis_options is None:
+        analysis_options = [opt['id'] for opt in ANALYSIS_OPTIONS if opt['default']]
+    
     results = {}
+    dual_audio = filepath2 is not None
+    
+    # Calculate progress steps
+    total_steps = len(analysis_options) + 2  # +2 for loading and finalizing
+    current_step = 0
     
     # Load audio
+    log_progress(task_id, f"加载音频文件: {os.path.basename(filepath1)}")
     y1, sr = loader.load_audio(filepath1, target_sr=16000)
     results['audio_info'] = {
         'duration': len(y1) / sr,
         'sample_rate': sr,
         'samples': len(y1)
     }
+    log_progress(task_id, f"音频信息: 时长={len(y1)/sr:.2f}s, 采样率={sr}Hz, 样本数={len(y1)}")
+    
+    current_step += 1
+    update_progress(task_id, int(current_step / total_steps * 100))
 
-    # Store raw audio for downstream use (visualization, etc.)
+    # Store raw audio for downstream use
     results['_y1'] = y1
     results['_sr'] = sr
     
-    # Feature extraction
-    t, y = features.compute_waveform(y1, sr)
-    results['waveform'] = {'t': t, 'y': y}
+    # ============================================================
+    # Feature Extraction
+    # ============================================================
+    if 'features' in analysis_options:
+        log_progress(task_id, "=" * 50, 'divider')
+        log_progress(task_id, "PHASE 1: 特征提取", 'phase')
+        log_progress(task_id, "=" * 50, 'divider')
+        
+        log_progress(task_id, "[1.1] 提取波形...")
+        t, y = features.compute_waveform(y1, sr)
+        results['waveform'] = {'t': t, 'y': y}
+        
+        log_progress(task_id, "[1.2] 计算FFT...")
+        freqs, mag = features.compute_fft(y1, sr)
+        results['fft'] = {'freqs': freqs, 'mag': mag}
+        
+        log_progress(task_id, "[1.3] 计算STFT...")
+        f_stft, t_stft, spec_stft = features.compute_stft(y1, sr)
+        results['stft'] = {'freqs': f_stft, 'times': t_stft, 'spec': spec_stft}
+        
+        log_progress(task_id, "[1.4] 计算Mel频谱图...")
+        mel_freqs, mel_times, mel_spec = features.compute_mel_spectrogram(y1, sr, n_mels=n_mels)
+        results['mel'] = {'freqs': mel_freqs, 'times': mel_times, 'spec': mel_spec}
+        
+        log_progress(task_id, f"[完成] Mel形状: {mel_spec.shape}")
+        
+        current_step += 1
+        update_progress(task_id, int(current_step / total_steps * 100))
     
-    freqs, mag = features.compute_fft(y1, sr)
-    results['fft'] = {'freqs': freqs, 'mag': mag}
-    
-    f_stft, t_stft, spec_stft = features.compute_stft(y1, sr)
-    results['stft'] = {'freqs': f_stft, 'times': t_stft, 'spec': spec_stft}
-    
-    mel_freqs, mel_times, mel_spec = features.compute_mel_spectrogram(y1, sr, n_mels=n_mels)
-    results['mel'] = {'freqs': mel_freqs, 'times': mel_times, 'spec': mel_spec}
+    # ============================================================
+    # Dynamics Layer: Trend Analysis
+    # ============================================================
+    dyn1 = None
+    if 'dynamics' in analysis_options:
+        log_progress(task_id, "=" * 50, 'divider')
+        log_progress(task_id, "PHASE 1.5: 动态趋势分析", 'phase')
+        log_progress(task_id, "=" * 50, 'divider')
+        
+        log_progress(task_id, "[Dyn] 提取动态特征 (能量、亮度、复杂度、节奏)...")
+        dyn1 = dynamics.extract_dynamics(y1, sr, window_size=0.5, hop_size=0.25)
+        results['dynamics'] = dyn1
+        results['dynamics_segments'] = dynamics.detect_structural_segments(dyn1)
+        log_progress(task_id, "[完成] 动态趋势分析完成")
+        
+        if dual_audio and filepath2:
+            y2, _ = loader.load_audio(filepath2, target_sr=sr)
+            results['_y2'] = y2
 
-    # ---- Dynamics Layer: Trend Analysis ----
-    # Inserted between Feature Extraction and Time Series Analysis
-    dyn1 = dynamics.extract_dynamics(y1, sr, window_size=0.5, hop_size=0.25)
-    results['dynamics'] = dyn1
-    results['dynamics_segments'] = dynamics.detect_structural_segments(dyn1)
+        current_step += 1
+        update_progress(task_id, int(current_step / total_steps * 100))
 
-    # Time series analysis
-    lags, acf_vals, ci = analysis.compute_acf(y[:min(len(y), 4000)], nlags=40)
-    _, pacf_vals, _ = analysis.compute_pacf(y[:min(len(y), 4000)], nlags=40)
-    results['acf_pacf'] = {'lags': lags, 'acf': acf_vals, 'pacf': pacf_vals, 'ci': ci}
+    # ============================================================
+    # Time Series Analysis
+    # ============================================================
+    if 'timeseries' in analysis_options:
+        log_progress(task_id, "=" * 50, 'divider')
+        log_progress(task_id, "PHASE 2: 时序分析", 'phase')
+        log_progress(task_id, "=" * 50, 'divider')
+        
+        y_for_ts = results.get('waveform', {}).get('y', y1)
+        
+        log_progress(task_id, "[2.1] 计算ACF & PACF...")
+        lags, acf_vals, ci = analysis.compute_acf(y_for_ts[:min(len(y_for_ts), 4000)], nlags=40)
+        _, pacf_vals, _ = analysis.compute_pacf(y_for_ts[:min(len(y_for_ts), 4000)], nlags=40)
+        results['acf_pacf'] = {'lags': lags, 'acf': acf_vals, 'pacf': pacf_vals, 'ci': ci}
+        
+        log_progress(task_id, "[2.2] 周期性分析...")
+        periodicity = analysis.analyze_periodicity(y1, sr)
+        results['periodicity'] = periodicity
+        log_progress(task_id, f"      主频率: {periodicity['dominant_frequency']:.1f} Hz")
+        log_progress(task_id, f"      主周期: {periodicity['dominant_period_seconds']:.4f}s")
+        
+        log_progress(task_id, "[2.3] 复杂度分析...")
+        complexity = analysis.analyze_complexity(y1)
+        results['complexity'] = complexity
+        log_progress(task_id, f"      过零率: {complexity['zero_crossing_rate']:.4f}")
+        log_progress(task_id, f"      样本熵: {complexity['sample_entropy']:.4f}")
+        
+        log_progress(task_id, "[2.4] 频谱平坦度...")
+        fft_mag_for_sf = results.get('fft', {}).get('mag', features.compute_fft(y1, sr)[1])
+        flatness = analysis.compute_spectral_flatness(fft_mag_for_sf)
+        results['spectral_flatness'] = flatness
+        log_progress(task_id, f"      频谱平坦度: {flatness:.4f} (0=音调, 1=噪声)")
+        
+        current_step += 1
+        update_progress(task_id, int(current_step / total_steps * 100))
     
-    periodicity = analysis.analyze_periodicity(y1, sr)
-    results['periodicity'] = periodicity
-    
-    complexity = analysis.analyze_complexity(y1)
-    results['complexity'] = complexity
-    
-    flatness = analysis.compute_spectral_flatness(mag)
-    results['spectral_flatness'] = flatness
-    
-    # Unsupervised pattern discovery (replaces simple prediction)
-    unsup_report = unsupervised.explore_unsupervised(
-        y1, sr, n_components=4, n_clusters=4, verbose=False,
-    )
-    results['unsupervised'] = unsup_report
+    # ============================================================
+    # Unsupervised Pattern Discovery
+    # ============================================================
+    if 'unsupervised' in analysis_options:
+        log_progress(task_id, "=" * 50, 'divider')
+        log_progress(task_id, "PHASE 3: 无监督模式发现", 'phase')
+        log_progress(task_id, "=" * 50, 'divider')
+        
+        log_progress(task_id, "[Unsup] 运行聚类和motif检测...")
+        unsup_report = unsupervised.explore_unsupervised(
+            y1, sr, n_components=4, n_clusters=4, verbose=False,
+        )
+        results['unsupervised'] = unsup_report
+        log_progress(task_id, f"[完成] 发现 {len(unsup_report.change_points)} 个变点, {len(unsup_report.motifs)} 个motif")
+        
+        current_step += 1
+        update_progress(task_id, int(current_step / total_steps * 100))
 
-    # Legacy prediction & band analysis kept for backward compat
-    results['predictions'] = prediction.run_all_predictions(mel_spec, forecast_horizon=forecast_horizon, verbose=False)
-    band_results = band_analysis.analyze_band_predictability(mel_spec, forecast_horizon=forecast_horizon)
-    results['band_results'] = band_results
-    results['band_summary'] = band_analysis.compute_band_error_summary(band_results)
-    results['predictability_rank'] = band_analysis.get_predictability_rank(results['band_summary'])
+    # ============================================================
+    # Prediction & Band Analysis
+    # ============================================================
+    if 'prediction' in analysis_options or 'band' in analysis_options:
+        if 'features' in analysis_options and 'mel' in results:
+            mel_spec = results['mel']['spec']
+        else:
+            _, _, mel_spec = features.compute_mel_spectrogram(y1, sr, n_mels=n_mels)
+        
+        if 'prediction' in analysis_options:
+            log_progress(task_id, "=" * 50, 'divider')
+            log_progress(task_id, "PHASE 4: 机器学习预测", 'phase')
+            log_progress(task_id, "=" * 50, 'divider')
+            
+            log_progress(task_id, "[Pred] 运行所有预测模型 (ARIMA, HMM, LSTM, Transformer)...")
+            results['predictions'] = prediction.run_all_predictions(mel_spec, forecast_horizon=forecast_horizon, verbose=False)
+            
+            log_progress(task_id, "[完成] 模型性能摘要:")
+            for model_name, (forecast, metrics, true) in results['predictions'].items():
+                if metrics:
+                    log_progress(task_id, f"  {model_name}: RMSE={metrics.get('RMSE', 'N/A'):.4f}, MAE={metrics.get('MAE', 'N/A'):.4f}")
+            
+            current_step += 1
+            update_progress(task_id, int(current_step / total_steps * 100))
+        
+        if 'band' in analysis_options:
+            log_progress(task_id, "=" * 50, 'divider')
+            log_progress(task_id, "PHASE 4.5: 频带分析", 'phase')
+            log_progress(task_id, "=" * 50, 'divider')
+            
+            log_progress(task_id, "[Band] 分析频带可预测性...")
+            band_results = band_analysis.analyze_band_predictability(mel_spec, forecast_horizon=forecast_horizon)
+            results['band_results'] = band_results
+            results['band_summary'] = band_analysis.compute_band_error_summary(band_results)
+            results['predictability_rank'] = band_analysis.get_predictability_rank(results['band_summary'])
+            
+            log_progress(task_id, "[完成] 频带可预测性排名:")
+            for i, item in enumerate(results['predictability_rank'], 1):
+                log_progress(task_id, f"  {i}. {item['band']} - 最佳: {item['best_model']}, RMSE: {item['avg_rmse']:.4f}")
+            
+            current_step += 1
+            update_progress(task_id, int(current_step / total_steps * 100))
     
-    # Dual audio analysis — full similarity pipeline
-    if filepath2:
+    # ============================================================
+    # Dual Audio Analysis
+    # ============================================================
+    if 'comparison' in analysis_options and dual_audio and filepath2:
+        log_progress(task_id, "=" * 50, 'divider')
+        log_progress(task_id, "PHASE 5: 双音频对比", 'phase')
+        log_progress(task_id, "=" * 50, 'divider')
+        
+        log_progress(task_id, f"[Comp] 加载第二个音频: {os.path.basename(filepath2)}")
         y2, sr2 = loader.load_audio(filepath2, target_sr=sr)
-
-        # ---- Discovery: multi-dimensional exploration (replaces scoring) ----
         results['_y2'] = y2
+
+        log_progress(task_id, "[Comp] 运行多维探索分析...")
         disc_report = discovery.explore(
             y1, sr, y2, sr2,
-            window_size=0.5, hop_size=0.25, verbose=True,
+            window_size=0.5, hop_size=0.25, verbose=False,
         )
         results['discovery'] = disc_report
+        log_progress(task_id, f"[完成] 发现 {len(disc_report.discoveries)} 个匹配, {len(disc_report.contrasts)} 个对比")
+        
+        current_step += 1
+        update_progress(task_id, int(current_step / total_steps * 100))
 
-        # Legacy DTW kept for backward compatibility
-        try:
-            from dtw import dtw
-            from scipy.spatial.distance import euclidean
-            mel2_freqs, mel2_times, mel2_spec = features.compute_mel_spectrogram(y2, sr2, n_mels=n_mels)
-            mel1_mean = np.mean(mel_spec, axis=0)[:100]
-            mel2_mean = np.mean(mel2_spec, axis=0)[:100]
-            dtw_result = dtw(mel1_mean.reshape(-1, 1), mel2_mean.reshape(-1, 1), dist_method=euclidean)
-            results['dtw'] = {
-                'distance': dtw_result.distance,
-                'similarity': 1 - dtw_result.distance / (len(mel1_mean) * np.std(mel1_mean)),
-                'path': dtw_result.index.tolist(),
-                'x': mel1_mean, 'y': mel2_mean,
-            }
-        except ImportError:
-            results['dtw'] = {'error': 'dtw library not installed'}
-
+    # Store analysis options used
+    results['analysis_options'] = analysis_options
+    
     return results
 
 
@@ -119,6 +302,9 @@ def index():
         task_id = str(uuid.uuid4())[:8]
         output_dir = os.path.join(app.config['OUTPUT_FOLDER'], task_id)
         os.makedirs(output_dir, exist_ok=True)
+        
+        # Initialize progress
+        analysis_progress[task_id] = {'logs': [], 'status': 'running', 'progress': 0}
         
         # Save uploaded files
         filepath1 = None
@@ -136,6 +322,9 @@ def index():
             filepath2 = os.path.join(app.config['UPLOAD_FOLDER'], f"{task_id}_2_{filename}")
             file.save(filepath2)
         
+        # Check if we have dual audio
+        has_dual_audio = filepath2 is not None
+        
         # Use synthetic audio if no file uploaded
         if not filepath1:
             y1, sr = loader.generate_sample_audio(duration=5.0)
@@ -147,189 +336,210 @@ def index():
         forecast_horizon = int(request.form.get('forecast_horizon', 20))
         n_mels = int(request.form.get('n_mels', 128))
         
-        # Perform analysis
-        results = analyze_audio(filepath1, filepath2, forecast_horizon, n_mels)
+        # Parse analysis options
+        analysis_options = parse_analysis_options(request.form, has_dual_audio)
         
-        # Generate plots
-        plot_files = visualization.generate_report_plots(results, output_dir)
-
-        # Generate discovery plots if dual-audio analysis was performed
-        if results.get('discovery'):
-            disc = results['discovery']
-            dyn_a = results.get('dynamics')
-            # Re-extract dyn2 for visualization
-            dyn_b = None
-            if results.get('_y2') is not None and results.get('_sr') is not None:
-                dyn_b = dynamics.extract_dynamics(results['_y2'], results['_sr'],
-                                                  window_size=0.5, hop_size=0.25)
-
-            disc_plots = discovery_viz.generate_discovery_report_plots(
-                disc,
-                output_dir=os.path.join(output_dir, 'discovery'),
-                y1=results.get('_y1'), y2=results.get('_y2'),
-                sr=results.get('_sr'),
-                dyn1=dyn_a, dyn2=dyn_b,
-            )
-            plot_files += [f"discovery/{p}" for p in disc_plots]
-
-        # Generate dynamics/trend plots
-        if results.get('dynamics'):
-            dyn_dir = os.path.join(output_dir, 'dynamics')
-            os.makedirs(dyn_dir, exist_ok=True)
-            dyn = results['dynamics']
-            seg = results.get('dynamics_segments')
-            visualization.plot_dynamics_trends(
-                dyn, segments=seg,
-                save_path=os.path.join(dyn_dir, 'trends.png'),
-            )
-            visualization.plot_dynamics_summary(
-                dyn, segments=seg,
-                save_path=os.path.join(dyn_dir, 'summary.png'),
-            )
-            plot_files.append('dynamics/trends.png')
-            plot_files.append('dynamics/summary.png')
-
-        # Create serializable version of discovery report (strip raw arrays)
-        if results.get('discovery'):
-            disc = results['discovery']
-
-            def _profile_to_dict(p):
-                if p is None:
-                    return None
-                return {
-                    'rhythm_signature': p.rhythm_signature,
-                    'energy_profile': p.energy_profile,
-                    'timbre_quality': p.timbre_quality,
-                    'standout_features': p.standout_features,
-                }
-
-            def _discovery_to_dict(d):
-                return {
-                    'title': d.title,
-                    'dimension': d.dimension,
-                    'discovery_type': d.discovery_type,
-                    'summary': d.summary,
-                    'n_matches': len(d.segment_matches),
-                    'avg_confidence': d.meta.get('avg_confidence', 0),
-                    'matches': [
-                        {
-                            'a_start': sm.a.start, 'a_end': sm.a.end,
-                            'b_start': sm.b.start, 'b_end': sm.b.end,
-                            'confidence': sm.evidence.confidence,
-                            'method': sm.evidence.method,
-                        }
-                        for sm in d.segment_matches[:10]
-                    ],
-                }
-
-            results['discovery_serializable'] = {
-                'audio_a_profile': _profile_to_dict(disc.audio_a_profile),
-                'audio_b_profile': _profile_to_dict(disc.audio_b_profile),
-                'audio_a_motifs_count': len(disc.audio_a_motifs),
-                'audio_b_motifs_count': len(disc.audio_b_motifs),
-                'n_discoveries': len(disc.discoveries),
-                'n_contrasts': len(disc.contrasts),
-                'overview': disc.overview,
-                'discoveries': [_discovery_to_dict(d) for d in disc.discoveries],
-                'contrasts': [_discovery_to_dict(c) for c in disc.contrasts],
-                'params': disc.params,
-            }
-
-        # Create serializable version of dynamics (strip raw arrays)
-        if results.get('dynamics'):
-            from audiots.dynamics import summarize_dynamics
-            dyn_summary = summarize_dynamics(results['dynamics'])
-            seg = results.get('dynamics_segments', {})
-            results['dynamics_serializable'] = {
-                'summary': dyn_summary,
-                'n_climax': len(seg.get('climax_indices', [])),
-                'n_calm': len(seg.get('calm_indices', [])),
-                'n_buildup': len(seg.get('buildup_indices', [])),
-                'n_transition': len(seg.get('transition_indices', [])),
-            }
-            if results.get('dynamics_similarity'):
-                ds = results['dynamics_similarity']
-                results['dynamics_serializable']['similarity'] = {
-                    'global': ds['global_dynamics_similarity'],
-                    'dominant_trend': ds['dominant_trend'],
-                    'coherence': ds['structural_coherence'],
-                    'per_trend': {
-                        k: {'structural_score': v['structural_score']}
-                        for k, v in ds['per_trend'].items()
-                    },
-                }
-
-        # Create serializable version of unsupervised report
-        if results.get('unsupervised'):
-            u = results['unsupervised']
-            results['unsupervised_serializable'] = {
-                'n_change_points': len(u.change_points),
-                'change_points': u.change_points,
-                'n_segments': len(u.segments),
-                'segments': [
-                    {'start': s.start, 'end': s.end, 'label': s.label,
-                     'character': s.character}
-                    for s in u.segments
-                ],
-                'n_motifs': len(u.motifs),
-                'motifs': [
-                    {'length': m.length_seconds, 'n_occurrences': len(m.occurrences),
-                     'significance': m.significance, 'description': m.description}
-                    for m in u.motifs
-                ],
-                'n_spectral_components': u.n_components,
-                'spectral_components': [
-                    {'character': sc.character, 'weight': sc.weight}
-                    for sc in u.spectral_components
-                ],
-                'reconstruction_error': u.reconstruction_error,
-                'determinism': u.determinism,
-                'laminarity': u.laminarity,
-                'recurrence_interpretation': u.recurrence_interpretation,
-                'silhouette_score': u.silhouette_score,
-                'overview': u.overview,
-            }
-
-        # Store results
-        results['task_id'] = task_id
-        results['plot_files'] = plot_files
-        results['params'] = {
+        # Store task info for async processing
+        task_info = {
+            'task_id': task_id,
+            'filepath1': filepath1,
+            'filepath2': filepath2,
             'forecast_horizon': forecast_horizon,
             'n_mels': n_mels,
-            'audio1_name': os.path.basename(filepath1),
-            'audio2_name': os.path.basename(filepath2) if filepath2 else None
+            'analysis_options': analysis_options,
+            'output_dir': output_dir
         }
         
-        # Save results to JSON (strip internal/large data first)
-        serializable = {k: v for k, v in results.items()
-                        if not k.startswith('_') and k not in (
-                            'similarity', 'discovery', 'unsupervised',
-                            'dynamics', 'dynamics_2',
-                            'dynamics_segments', 'dynamics_segments_2',
-                            'dynamics_similarity',
-                        )}
-        if results.get('similarity_serializable'):
-            serializable['similarity'] = results['similarity_serializable']
-        if results.get('discovery_serializable'):
-            serializable['discovery'] = results['discovery_serializable']
-        if results.get('unsupervised_serializable'):
-            serializable['unsupervised'] = results['unsupervised_serializable']
-        if results.get('dynamics_serializable'):
-            serializable['dynamics'] = results['dynamics_serializable']
-
-        import json
-        with open(os.path.join(output_dir, 'results.json'), 'w', encoding='utf-8') as f:
-            json.dump(serializable, f, default=str, ensure_ascii=False)
+        # Save task info
+        with open(os.path.join(output_dir, 'task_info.json'), 'w') as f:
+            json.dump({k: v for k, v in task_info.items() if k != 'results'}, f, default=str)
         
-        return redirect(url_for('results', task_id=task_id))
+        # Return task_id for SSE streaming
+        return render_template('analysis.html', task_id=task_id, analysis_options=analysis_options)
     
-    return render_template('index.html')
+    return render_template('index.html', analysis_options=ANALYSIS_OPTIONS)
 
 
-def secure_filename(filename):
-    """Simple secure filename function."""
-    import re
-    return re.sub(r'[^a-zA-Z0-9_\-\.]', '_', filename)
+@app.route('/stream/<task_id>')
+def stream(task_id):
+    """SSE endpoint for streaming analysis progress."""
+    def generate():
+        output_dir = os.path.join(app.config['OUTPUT_FOLDER'], task_id)
+        
+        # Load task info
+        try:
+            with open(os.path.join(output_dir, 'task_info.json'), 'r') as f:
+                task_info = json.load(f)
+        except:
+            yield f"data: {json.dumps({'type': 'error', 'message': 'Task not found'})}\n\n"
+            return
+        
+        # Send initial status
+        yield f"data: {json.dumps({'type': 'status', 'status': 'running', 'progress': 0})}\n\n"
+        
+        # Run analysis in a separate thread
+        def run_analysis():
+            try:
+                results = analyze_audio_with_progress(
+                    task_id,
+                    task_info['filepath1'],
+                    task_info.get('filepath2'),
+                    task_info['forecast_horizon'],
+                    task_info['n_mels'],
+                    task_info['analysis_options']
+                )
+                
+                # Generate plots if visualization is enabled
+                plot_files = []
+                if 'visualization' in task_info['analysis_options']:
+                    log_progress(task_id, "=" * 50, 'divider')
+                    log_progress(task_id, "PHASE 6: 生成可视化", 'phase')
+                    log_progress(task_id, "=" * 50, 'divider')
+                    
+                    log_progress(task_id, "[Viz] 生成分析图表...")
+                    plot_files = visualization.generate_report_plots(results, output_dir)
+
+                    # Generate discovery plots
+                    if results.get('discovery'):
+                        disc = results['discovery']
+                        dyn_a = results.get('dynamics')
+                        dyn_b = None
+                        if results.get('_y2') is not None and results.get('_sr') is not None:
+                            dyn_b = dynamics.extract_dynamics(results['_y2'], results['_sr'],
+                                                              window_size=0.5, hop_size=0.25)
+
+                        disc_plots = discovery_viz.generate_discovery_report_plots(
+                            disc,
+                            output_dir=os.path.join(output_dir, 'discovery'),
+                            y1=results.get('_y1'), y2=results.get('_y2'),
+                            sr=results.get('_sr'),
+                            dyn1=dyn_a, dyn2=dyn_b,
+                        )
+                        plot_files += [f"discovery/{p}" for p in disc_plots]
+
+                    # Generate dynamics plots
+                    if results.get('dynamics'):
+                        dyn_dir = os.path.join(output_dir, 'dynamics')
+                        os.makedirs(dyn_dir, exist_ok=True)
+                        dyn = results['dynamics']
+                        seg = results.get('dynamics_segments')
+                        visualization.plot_dynamics_trends(
+                            dyn, segments=seg,
+                            save_path=os.path.join(dyn_dir, 'trends.png'),
+                        )
+                        visualization.plot_dynamics_summary(
+                            dyn, segments=seg,
+                            save_path=os.path.join(dyn_dir, 'summary.png'),
+                        )
+                        plot_files.append('dynamics/trends.png')
+                        plot_files.append('dynamics/summary.png')
+                    
+                    log_progress(task_id, f"[完成] 生成了 {len(plot_files)} 个图表")
+
+                # Create serializable versions
+                if results.get('discovery'):
+                    disc = results['discovery']
+                    def _profile_to_dict(p):
+                        if p is None: return None
+                        return {'rhythm_signature': p.rhythm_signature, 'energy_profile': p.energy_profile,
+                                'timbre_quality': p.timbre_quality, 'standout_features': p.standout_features}
+                    def _discovery_to_dict(d):
+                        return {'title': d.title, 'dimension': d.dimension, 'discovery_type': d.discovery_type,
+                                'summary': d.summary, 'n_matches': len(d.segment_matches),
+                                'avg_confidence': d.meta.get('avg_confidence', 0)}
+                    results['discovery_serializable'] = {
+                        'audio_a_profile': _profile_to_dict(disc.audio_a_profile),
+                        'audio_b_profile': _profile_to_dict(disc.audio_b_profile),
+                        'n_discoveries': len(disc.discoveries), 'n_contrasts': len(disc.contrasts),
+                        'overview': disc.overview, 'params': disc.params,
+                    }
+
+                if results.get('dynamics'):
+                    from audiots.dynamics import summarize_dynamics
+                    dyn_summary = summarize_dynamics(results['dynamics'])
+                    seg = results.get('dynamics_segments', {})
+                    results['dynamics_serializable'] = {
+                        'summary': dyn_summary,
+                        'n_climax': len(seg.get('climax_indices', [])),
+                        'n_calm': len(seg.get('calm_indices', [])),
+                    }
+
+                if results.get('unsupervised'):
+                    u = results['unsupervised']
+                    results['unsupervised_serializable'] = {
+                        'n_change_points': len(u.change_points),
+                        'n_segments': len(u.segments),
+                        'n_motifs': len(u.motifs),
+                        'overview': u.overview,
+                    }
+
+                # Store results
+                results['task_id'] = task_id
+                results['plot_files'] = plot_files
+                results['params'] = {
+                    'forecast_horizon': task_info['forecast_horizon'],
+                    'n_mels': task_info['n_mels'],
+                    'audio1_name': os.path.basename(task_info['filepath1']),
+                    'audio2_name': os.path.basename(task_info['filepath2']) if task_info.get('filepath2') else None,
+                    'analysis_options': task_info['analysis_options']
+                }
+                
+                # Save results
+                serializable = {k: v for k, v in results.items()
+                                if not k.startswith('_') and k not in (
+                                    'similarity', 'discovery', 'unsupervised',
+                                    'dynamics', 'dynamics_2',
+                                    'dynamics_segments', 'dynamics_segments_2',
+                                    'dynamics_similarity',
+                                )}
+                if results.get('discovery_serializable'):
+                    serializable['discovery'] = results['discovery_serializable']
+                if results.get('unsupervised_serializable'):
+                    serializable['unsupervised'] = results['unsupervised_serializable']
+                if results.get('dynamics_serializable'):
+                    serializable['dynamics'] = results['dynamics_serializable']
+
+                with open(os.path.join(output_dir, 'results.json'), 'w', encoding='utf-8') as f:
+                    json.dump(serializable, f, default=str, ensure_ascii=False)
+                
+                log_progress(task_id, "=" * 50, 'divider')
+                log_progress(task_id, "分析完成!", 'success')
+                log_progress(task_id, "=" * 50, 'divider')
+                update_progress(task_id, 100, 'completed')
+                
+            except Exception as e:
+                log_progress(task_id, f"错误: {str(e)}", 'error')
+                update_progress(task_id, 0, 'error')
+        
+        # Start analysis thread
+        import threading
+        thread = threading.Thread(target=run_analysis)
+        thread.start()
+        
+        # Stream logs
+        last_log_index = 0
+        while True:
+            if task_id in analysis_progress:
+                progress_data = analysis_progress[task_id]
+                
+                # Send new logs
+                logs = progress_data['logs']
+                for i in range(last_log_index, len(logs)):
+                    yield f"data: {json.dumps({'type': 'log', 'log': logs[i]})}\n\n"
+                last_log_index = len(logs)
+                
+                # Send progress update
+                yield f"data: {json.dumps({'type': 'progress', 'progress': progress_data['progress'], 'status': progress_data['status']})}\n\n"
+                
+                # Check if completed
+                if progress_data['status'] in ['completed', 'error']:
+                    if progress_data['status'] == 'completed':
+                        yield f"data: {json.dumps({'type': 'complete', 'task_id': task_id})}\n\n"
+                    break
+            
+            time.sleep(0.1)
+    
+    return Response(stream_with_context(generate()), mimetype='text/event-stream')
 
 
 @app.route('/results/<task_id>')
@@ -341,7 +551,6 @@ def results(task_id):
         return "分析任务不存在", 404
     
     # Load results
-    import json
     with open(os.path.join(output_dir, 'results.json'), 'r', encoding='utf-8') as f:
         results = json.load(f)
     
@@ -356,48 +565,11 @@ def results(task_id):
                           task_id=task_id)
 
 
-@app.route('/api/analyze', methods=['POST'])
-def api_analyze():
-    """API endpoint for analysis."""
-    if 'audio1' not in request.files:
-        return {'error': 'No audio file provided'}, 400
-    
-    file = request.files['audio1']
-    if file.filename == '':
-        return {'error': 'No selected file'}, 400
-    
-    task_id = str(uuid.uuid4())[:8]
-    output_dir = os.path.join(app.config['OUTPUT_FOLDER'], task_id)
-    os.makedirs(output_dir, exist_ok=True)
-    
-    filepath1 = os.path.join(app.config['UPLOAD_FOLDER'], f"{task_id}_{secure_filename(file.filename)}")
-    file.save(filepath1)
-    
-    forecast_horizon = int(request.form.get('forecast_horizon', 20))
-    n_mels = int(request.form.get('n_mels', 128))
-    
-    try:
-        results = analyze_audio(filepath1, None, forecast_horizon, n_mels)
-        visualization.generate_report_plots(results, output_dir)
-        return {'task_id': task_id, 'message': 'Analysis completed'}
-    except Exception as e:
-        return {'error': str(e)}, 500
-
-
-@app.route('/api/results/<task_id>')
-def api_results(task_id):
-    """API endpoint to get results."""
-    output_dir = os.path.join(app.config['OUTPUT_FOLDER'], task_id)
-    
-    if not os.path.exists(output_dir):
-        return {'error': 'Task not found'}, 404
-    
-    import json
-    with open(os.path.join(output_dir, 'results.json'), 'r', encoding='utf-8') as f:
-        results = json.load(f)
-    
-    return results
+def secure_filename(filename):
+    """Simple secure filename function."""
+    import re
+    return re.sub(r'[^a-zA-Z0-9_\-\.]', '_', filename)
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)

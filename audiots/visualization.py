@@ -393,40 +393,6 @@ def plot_band_errors(band_summary, save_path=None):
     return fig
 
 
-def plot_dtw_alignment(x, y, path, save_path=None, title='DTW Alignment Path'):
-    """Plot DTW alignment path.
-
-    Parameters
-    ----------
-    x : ndarray
-        First sequence (x-axis).
-    y : ndarray
-        Second sequence (y-axis).
-    path : list of (int, int)
-        DTW alignment path.
-    save_path : str, optional
-        Path to save the figure.
-    title : str
-        Plot title.
-    """
-    fig = plt.figure(figsize=(8, 8))
-    plt.imshow(np.zeros((len(y), len(x))), cmap='gray', extent=[0, len(x), 0, len(y)])
-
-    path_x = [p[0] for p in path]
-    path_y = [p[1] for p in path]
-    plt.plot(path_x, path_y, color='red', linewidth=2)
-
-    plt.title(title, fontsize=14)
-    plt.xlabel('Sequence X', fontsize=12)
-    plt.ylabel('Sequence Y', fontsize=12)
-    plt.tight_layout()
-    if save_path:
-        plt.savefig(save_path, dpi=100, bbox_inches='tight')
-        plt.close(fig)
-        return None
-    return fig
-
-
 def generate_report_plots(analysis_results, output_dir='outputs'):
     """Generate all visualization plots."""
     import os
@@ -470,12 +436,6 @@ def generate_report_plots(analysis_results, output_dir='outputs'):
     if 'band_summary' in analysis_results:
         plot_band_errors(analysis_results['band_summary'],
                          os.path.join(output_dir, 'band_errors.png'))
-
-    if 'dtw' in analysis_results:
-        plot_dtw_alignment(analysis_results['dtw']['path'],
-                           analysis_results['dtw']['x'],
-                           analysis_results['dtw']['y'],
-                           os.path.join(output_dir, 'dtw_alignment.png'))
 
     return [f for f in os.listdir(output_dir) if f.endswith('.png')]
 

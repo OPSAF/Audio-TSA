@@ -8,4 +8,3 @@ torch>=1.12
 hmmlearn>=0.2
 dtaidistance>=2.3
 soundfile>=0.10
-dtw-python>=0.1.1

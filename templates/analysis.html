@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>分析进度 - Audio Lab</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #ff6b00;
+            --primary-light: #ff8c00;
+            --bg-main: #0a0a0a;
+            --bg-card: linear-gradient(145deg, #141414, #1a1a1a);
+            --text-primary: #ffffff;
+            --text-secondary: rgba(255, 255, 255, 0.6);
+            --border-color: rgba(255, 107, 0, 0.2);
+            --glow-color: rgba(255, 107, 0, 0.15);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Rajdhani', 'Segoe UI', sans-serif;
+            background: var(--bg-main);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-family: 'Orbitron', monospace;
+            font-size: 2rem;
+            color: var(--primary);
+            letter-spacing: 4px;
+            margin-bottom: 10px;
+        }
+
+        .task-id {
+            color: var(--text-secondary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+        }
+
+        .progress-section {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .progress-title {
+            font-family: 'Orbitron', monospace;
+            font-size: 1.1rem;
+            color: var(--primary);
+            letter-spacing: 2px;
+        }
+
+        .progress-percentage {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.5rem;
+            color: var(--primary);
+        }
+
+        .progress-bar-container {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            height: 20px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-bar {
+            background: linear-gradient(90deg, var(--primary), var(--primary-light));
+            height: 100%;
+            border-radius: 10px;
+            transition: width 0.3s ease;
+            position: relative;
+        }
+
+        .progress-bar::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        .log-section {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 30px;
+        }
+
+        .log-header {
+            font-family: 'Orbitron', monospace;
+            font-size: 1.1rem;
+            color: var(--primary);
+            letter-spacing: 2px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .log-container {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 12px;
+            padding: 20px;
+            max-height: 500px;
+            overflow-y: auto;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            line-height: 1.6;
+        }
+
+        .log-line {
+            display: flex;
+            gap: 15px;
+            padding: 4px 0;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .log-time {
+            color: var(--text-secondary);
+            flex-shrink: 0;
+        }
+
+        .log-message {
+            color: var(--text-primary);
+            word-break: break-all;
+        }
+
+        .log-line.phase .log-message {
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        .log-line.success .log-message {
+            color: #22c55e;
+            font-weight: 600;
+        }
+
+        .log-line.error .log-message {
+            color: #ef4444;
+        }
+
+        .log-line.warning .log-message {
+            color: #f59e0b;
+        }
+
+        .log-line.divider .log-message {
+            color: var(--text-secondary);
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .status-badge.running {
+            background: rgba(255, 107, 0, 0.2);
+            color: var(--primary);
+        }
+
+        .status-badge.completed {
+            background: rgba(34, 197, 94, 0.2);
+            color: #22c55e;
+        }
+
+        .status-badge.error {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+
+        .status-badge i {
+            animation: pulse 1.5s infinite;
+        }
+
+        .status-badge.completed i,
+        .status-badge.error i {
+            animation: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .actions {
+            text-align: center;
+            margin-top: 30px;
+            display: none;
+        }
+
+        .actions.visible {
+            display: block;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 35px;
+            border-radius: 30px;
+            font-family: 'Orbitron', monospace;
+            font-size: 1rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--primary-light));
+            color: #fff;
+            border: none;
+        }
+
+        .btn-primary:hover {
+            transform: scale(1.05);
+            box-shadow: 0 10px 30px var(--glow-color);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--primary);
+            border: 2px solid var(--primary);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 107, 0, 0.1);
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--glow-color);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .analysis-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .option-tag {
+            background: rgba(255, 107, 0, 0.15);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 0.85rem;
+            color: var(--text-primary);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><i class="fas fa-cog fa-spin"></i> ANALYSIS IN PROGRESS</h1>
+            <p class="task-id">Task ID: {{ task_id }}</p>
+            <div class="analysis-options">
+                {% for opt in analysis_options %}
+                <span class="option-tag">{{ opt }}</span>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="progress-section">
+            <div class="progress-header">
+                <span class="progress-title"><i class="fas fa-chart-line"></i> PROGRESS</span>
+                <span class="status-badge running" id="statusBadge">
+                    <i class="fas fa-circle"></i> RUNNING
+                </span>
+            </div>
+            <div class="progress-bar-container">
+                <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+            </div>
+            <div style="text-align: right; margin-top: 10px;">
+                <span class="progress-percentage" id="progressText">0%</span>
+            </div>
+        </div>
+
+        <div class="log-section">
+            <div class="log-header">
+                <i class="fas fa-terminal"></i> CONSOLE OUTPUT
+            </div>
+            <div class="log-container" id="logContainer">
+                <div class="log-line">
+                    <span class="log-time">--:--:--</span>
+                    <span class="log-message">Waiting for analysis to start...</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="actions" id="actions">
+            <a href="#" class="btn btn-primary" id="viewResultsBtn">
+                <i class="fas fa-chart-bar"></i> VIEW RESULTS
+            </a>
+            <a href="/" class="btn btn-secondary">
+                <i class="fas fa-plus"></i> NEW ANALYSIS
+            </a>
+        </div>
+    </div>
+
+    <script>
+        const taskId = '{{ task_id }}';
+        const logContainer = document.getElementById('logContainer');
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+        const statusBadge = document.getElementById('statusBadge');
+        const actions = document.getElementById('actions');
+        const viewResultsBtn = document.getElementById('viewResultsBtn');
+
+        // Clear initial message
+        logContainer.innerHTML = '';
+
+        // Connect to SSE endpoint
+        const eventSource = new EventSource('/stream/' + taskId);
+
+        eventSource.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            
+            if (data.type === 'log') {
+                addLog(data.log);
+            } else if (data.type === 'progress') {
+                updateProgress(data.progress, data.status);
+            } else if (data.type === 'complete') {
+                onComplete(data.task_id);
+            } else if (data.type === 'error') {
+                addLog({ time: getCurrentTime(), message: data.message, level: 'error' });
+            }
+        };
+
+        eventSource.onerror = function(error) {
+            console.error('SSE Error:', error);
+            addLog({ 
+                time: getCurrentTime(), 
+                message: 'Connection error. Please refresh the page.', 
+                level: 'error' 
+            });
+        };
+
+        function addLog(log) {
+            const line = document.createElement('div');
+            line.className = 'log-line ' + (log.level || 'info');
+            line.innerHTML = `
+                <span class="log-time">${log.time}</span>
+                <span class="log-message">${escapeHtml(log.message)}</span>
+            `;
+            logContainer.appendChild(line);
+            
+            // Auto scroll to bottom
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        function updateProgress(progress, status) {
+            progressBar.style.width = progress + '%';
+            progressText.textContent = progress + '%';
+            
+            if (status === 'completed') {
+                statusBadge.className = 'status-badge completed';
+                statusBadge.innerHTML = '<i class="fas fa-check"></i> COMPLETED';
+            } else if (status === 'error') {
+                statusBadge.className = 'status-badge error';
+                statusBadge.innerHTML = '<i class="fas fa-times"></i> ERROR';
+            }
+        }
+
+        function onComplete(taskId) {
+            actions.classList.add('visible');
+            viewResultsBtn.href = '/results/' + taskId;
+            eventSource.close();
+        }
+
+        function getCurrentTime() {
+            const now = new Date();
+            return now.toTimeString().split(' ')[0];
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
