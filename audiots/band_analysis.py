@@ -1,12 +1,77 @@
-"""Frequency band analysis module."""
+"""Frequency band analysis module with optimizations."""
 
 import numpy as np
+import multiprocessing as mp
+from functools import partial
 
 
-def analyze_band_predictability(mel_spec, forecast_horizon=20):
+def downsample_series(series, target_length=200):
+    """Downsample series to target length using interpolation."""
+    if len(series) <= target_length:
+        return series
+    indices = np.linspace(0, len(series) - 1, target_length, dtype=np.int32)
+    return series[indices]
+
+
+def analyze_single_band(band_data, band_info, forecast_horizon=20, epochs=15):
+    """Analyze a single frequency band with all models."""
+    from .prediction import predict_arima, predict_hmm, LSTMPredictor, TransformerPredictor, compute_metrics
+
+    band_mean = np.mean(band_data, axis=0)
+    
+    band_mean = downsample_series(band_mean, target_length=300)
+
+    train_size = int(len(band_mean) * 0.8)
+    train_series = band_mean[:train_size]
+    true_values = band_mean[train_size:train_size + forecast_horizon]
+
+    band_results = {}
+
+    arima_forecast, arima_metrics = predict_arima(train_series, forecast_horizon)
+    band_results['ARIMA'] = {
+        'forecast': arima_forecast,
+        'metrics': arima_metrics,
+        'true': true_values
+    }
+
+    hmm_forecast, hmm_metrics = predict_hmm(train_series, forecast_horizon)
+    band_results['HMM'] = {
+        'forecast': hmm_forecast,
+        'metrics': hmm_metrics,
+        'true': true_values
+    }
+
+    lstm = LSTMPredictor(lookback=20, hidden_size=32, num_layers=1)
+    lstm_forecast, lstm_metrics = lstm.predict(train_series, forecast_horizon, epochs=epochs)
+    band_results['LSTM'] = {
+        'forecast': lstm_forecast,
+        'metrics': lstm_metrics,
+        'true': true_values
+    }
+
+    transformer = TransformerPredictor(lookback=20, d_model=32, nhead=2, num_layers=1)
+    tf_forecast, tf_metrics = transformer.predict(train_series, forecast_horizon, epochs=epochs)
+    band_results['Transformer'] = {
+        'forecast': tf_forecast,
+        'metrics': tf_metrics,
+        'true': true_values
+    }
+
+    return {
+        'info': band_info,
+        'predictions': band_results
+    }
+
+
+def analyze_band_predictability(mel_spec, forecast_horizon=20, parallel=True, epochs=15):
     """
-    Analyze predictability across different frequency bands.
-    Returns dict with band-specific prediction results.
+    Analyze predictability across different frequency bands with optimizations.
+    
+    Optimizations:
+    1. Downsample long sequences to reduce computation
+    2. Reduce epochs for deep models
+    3. Use smaller model architectures for faster training
+    4. Parallelize band processing using multiprocessing
     """
     n_mels = mel_spec.shape[0]
     third = n_mels // 3
@@ -17,54 +82,31 @@ def analyze_band_predictability(mel_spec, forecast_horizon=20):
         'high': {'data': mel_spec[2 * third:, :], 'name': '高频带', 'range': f'{2 * third}-{n_mels}'}
     }
 
-    results = {}
-
-    for band_key, band_info in bands.items():
-        band_data = band_info['data']
-        band_mean = np.mean(band_data, axis=0)
-
-        train_size = int(len(band_mean) * 0.8)
-        train_series = band_mean[:train_size]
-        true_values = band_mean[train_size:train_size + forecast_horizon]
-
-        from .prediction import predict_arima, predict_hmm, LSTMPredictor, TransformerPredictor, compute_metrics
-
-        band_results = {}
-
-        arima_forecast, arima_metrics = predict_arima(train_series, forecast_horizon)
-        band_results['ARIMA'] = {
-            'forecast': arima_forecast,
-            'metrics': arima_metrics,
-            'true': true_values
-        }
-
-        hmm_forecast, hmm_metrics = predict_hmm(train_series, forecast_horizon)
-        band_results['HMM'] = {
-            'forecast': hmm_forecast,
-            'metrics': hmm_metrics,
-            'true': true_values
-        }
-
-        lstm = LSTMPredictor(lookback=30)
-        lstm_forecast, lstm_metrics = lstm.predict(train_series, forecast_horizon, epochs=40)
-        band_results['LSTM'] = {
-            'forecast': lstm_forecast,
-            'metrics': lstm_metrics,
-            'true': true_values
-        }
-
-        transformer = TransformerPredictor(lookback=30)
-        tf_forecast, tf_metrics = transformer.predict(train_series, forecast_horizon, epochs=40)
-        band_results['Transformer'] = {
-            'forecast': tf_forecast,
-            'metrics': tf_metrics,
-            'true': true_values
-        }
-
-        results[band_key] = {
-            'info': band_info,
-            'predictions': band_results
-        }
+    if parallel and len(bands) > 1:
+        num_workers = min(len(bands), mp.cpu_count() - 1 or 1)
+        print(f"  [Parallel] Using {num_workers} workers for band analysis...")
+        
+        with mp.Pool(processes=num_workers) as pool:
+            analyze_func = partial(analyze_single_band, forecast_horizon=forecast_horizon, epochs=epochs)
+            
+            band_items = list(bands.items())
+            band_data_list = [item[1]['data'] for item in band_items]
+            band_info_list = [item[1] for item in band_items]
+            
+            results_list = pool.starmap(analyze_func, zip(band_data_list, band_info_list))
+            
+            results = {}
+            for i, (band_key, _) in enumerate(band_items):
+                results[band_key] = results_list[i]
+    else:
+        results = {}
+        for band_key, band_info in bands.items():
+            print(f"  Processing {band_info['name']}...")
+            results[band_key] = analyze_single_band(
+                band_info['data'], band_info, 
+                forecast_horizon=forecast_horizon, 
+                epochs=epochs
+            )
 
     return results
 
@@ -133,9 +175,33 @@ def print_band_summary(summary):
     
     print("-" * 50)
     
-    # Print predictability ranking
     ranks = get_predictability_rank(summary)
     if ranks:
         print("\n[Predictability Ranking]")
         for rank in ranks:
             print(f"  #{rank['rank']} {rank['band']} (RMSE: {rank['avg_rmse']:.4f})")
+
+
+def print_detailed_band_results(band_results):
+    """Print detailed results for each model in each band."""
+    print("\n[Detailed Band Analysis Results]")
+    print("=" * 70)
+    
+    for band_key, band_data in band_results.items():
+        band_name = band_data['info']['name']
+        print(f"\n  {band_name} (Mel bins: {band_data['info']['range']})")
+        print("  " + "-" * 50)
+        print(f"  {'Model':<12} {'RMSE':<12} {'MAE':<12} {'MSE':<12}")
+        print("  " + "-" * 50)
+        
+        for model_name, model_data in band_data['predictions'].items():
+            metrics = model_data['metrics']
+            rmse = f"{metrics.get('RMSE', np.nan):.4f}" if 'RMSE' in metrics and not np.isnan(metrics['RMSE']) else "N/A"
+            mae = f"{metrics.get('MAE', np.nan):.4f}" if 'MAE' in metrics and not np.isnan(metrics['MAE']) else "N/A"
+            mse = f"{metrics.get('MSE', np.nan):.4f}" if 'MSE' in metrics and not np.isnan(metrics['MSE']) else "N/A"
+            print(f"  {model_name:<12} {rmse:<12} {mae:<12} {mse:<12}")
+        
+        if 'error' in metrics:
+            print(f"  Error: {metrics['error']}")
+    
+    print("\n" + "=" * 70)

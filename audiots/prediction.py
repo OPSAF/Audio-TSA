@@ -7,6 +7,46 @@ import warnings
 
 warnings.filterwarnings('ignore')
 
+# 全局GPU检测
+import torch
+_GLOBAL_DEVICE = None
+_GLOBAL_DEVICE_INFO = None
+
+def get_device(force_check=False):
+    """Get global device (GPU if available, else CPU) with detailed info."""
+    global _GLOBAL_DEVICE, _GLOBAL_DEVICE_INFO
+    
+    if _GLOBAL_DEVICE is None or force_check:
+        if torch.cuda.is_available():
+            _GLOBAL_DEVICE = torch.device('cuda')
+            _GLOBAL_DEVICE_INFO = {
+                'type': 'cuda',
+                'name': torch.cuda.get_device_name(0),
+                'memory_total': f"{torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB",
+                'memory_allocated': lambda: f"{torch.cuda.memory_allocated(0) / 1e9:.2f} GB",
+                'memory_cached': lambda: f"{torch.cuda.memory_reserved(0) / 1e9:.2f} GB"
+            }
+            print(f"[GPU INFO] Found CUDA device: {_GLOBAL_DEVICE_INFO['name']}")
+            print(f"[GPU INFO] Total memory: {_GLOBAL_DEVICE_INFO['memory_total']}")
+        else:
+            _GLOBAL_DEVICE = torch.device('cpu')
+            _GLOBAL_DEVICE_INFO = {'type': 'cpu', 'name': 'CPU', 'memory_total': 'N/A'}
+            print("[GPU INFO] WARNING: CUDA not available! Using CPU (will be very slow)")
+    
+    return _GLOBAL_DEVICE, _GLOBAL_DEVICE_INFO
+
+def print_gpu_usage():
+    """Print current GPU memory usage."""
+    if _GLOBAL_DEVICE_INFO and _GLOBAL_DEVICE_INFO['type'] == 'cuda':
+        print(f"[GPU USAGE] Allocated: {_GLOBAL_DEVICE_INFO['memory_allocated']()}, "
+              f"Cached: {_GLOBAL_DEVICE_INFO['memory_cached']()}")
+
+def clear_gpu_cache():
+    """Clear GPU memory cache."""
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        print("[GPU INFO] Cleared CUDA cache")
+
 
 def prepare_sequence_data(series, lookback=30, forecast_horizon=10):
     """Prepare sliding window data for time series prediction."""
@@ -170,22 +210,13 @@ class LSTMPredictor:
         self.dropout = dropout
         self.scaler = StandardScaler()
         self._model = None
-        self.device_info = None
+        self.device = None
 
-    def _get_device_info(self):
-        """Get device information and print status."""
-        import torch
-        if torch.cuda.is_available():
-            self.device_info = {
-                'type': 'cuda',
-                'device': torch.cuda.get_device_name(0),
-                'memory': f"{torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB"
-            }
-            print(f"  [LSTM] Using GPU: {self.device_info['device']} ({self.device_info['memory']})")
-        else:
-            self.device_info = {'type': 'cpu', 'device': 'CPU', 'memory': 'N/A'}
-            print("  [LSTM] CUDA not available, using CPU (will be slow!)")
-        return torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    def _get_device(self):
+        """Get device using global detection."""
+        self.device, device_info = get_device()
+        print(f"  [LSTM] Device: {device_info['type'].upper()} ({device_info['name']})")
+        return self.device
 
     def _build_model(self, forecast_horizon):
         import torch
@@ -224,23 +255,26 @@ class LSTMPredictor:
         if self._model is None:
             self._build_model(forecast_horizon)
 
-        device = self._get_device_info()
+        device = self._get_device()
         use_amp = torch.cuda.is_available()
-
+        
+        print(f"  [LSTM] Moving model to {device.type.upper()}...")
         model = self._model.to(device)
-        model = torch.compile(model) if hasattr(torch, 'compile') else model
 
+        print(f"  [LSTM] Moving data to {device.type.upper()}...")
         X_t = torch.tensor(X, dtype=torch.float32).unsqueeze(-1).to(device)
         y_t = torch.tensor(y, dtype=torch.float32).to(device)
 
         batch_size = min(256, len(X))
         dataset = torch.utils.data.TensorDataset(X_t, y_t)
-        dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
+        pin_memory = torch.cuda.is_available() and X_t.device.type == 'cpu'
+        dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, pin_memory=pin_memory)
 
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
         criterion = nn.MSELoss()
         scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
 
+        print(f"  [LSTM] Training for {epochs} epochs...")
         model.train()
         for epoch in range(epochs):
             for batch_X, batch_y in dataloader:
@@ -262,8 +296,7 @@ class LSTMPredictor:
                 last_input = torch.tensor(last_window, dtype=torch.float32).unsqueeze(0).unsqueeze(-1).to(device)
                 pred_scaled = model(last_input).cpu().numpy().flatten()
         
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        clear_gpu_cache()
 
         forecast = self.scaler.inverse_transform(pred_scaled.reshape(-1, 1)).flatten()
 
@@ -286,22 +319,13 @@ class TransformerPredictor:
         self.dropout = dropout
         self.scaler = StandardScaler()
         self._model = None
-        self.device_info = None
+        self.device = None
 
-    def _get_device_info(self):
-        """Get device information and print status."""
-        import torch
-        if torch.cuda.is_available():
-            self.device_info = {
-                'type': 'cuda',
-                'device': torch.cuda.get_device_name(0),
-                'memory': f"{torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB"
-            }
-            print(f"  [Transformer] Using GPU: {self.device_info['device']} ({self.device_info['memory']})")
-        else:
-            self.device_info = {'type': 'cpu', 'device': 'CPU', 'memory': 'N/A'}
-            print("  [Transformer] CUDA not available, using CPU (will be slow!)")
-        return torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    def _get_device(self):
+        """Get device using global detection."""
+        self.device, device_info = get_device()
+        print(f"  [Transformer] Device: {device_info['type'].upper()} ({device_info['name']})")
+        return self.device
 
     def _build_model(self, forecast_horizon):
         import torch
@@ -341,7 +365,7 @@ class TransformerPredictor:
             self.lookback, self.d_model, self.nhead,
             self.num_layers, self.dropout, forecast_horizon)
 
-    def predict(self, series, forecast_horizon=10, epochs=60, lr=0.001):
+    def predict(self, series, forecast_horizon=10, epochs=30, lr=0.001):
         import torch
         import torch.nn as nn
 
@@ -358,32 +382,43 @@ class TransformerPredictor:
         if self._model is None:
             self._build_model(forecast_horizon)
 
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        use_amp = torch.cuda.is_available() and torch.cuda.device_count() > 0
-
+        device = self._get_device()
+        use_amp = torch.cuda.is_available()
+        
+        print(f"  [Transformer] Moving model to {device.type.upper()}...")
         model = self._model.to(device)
 
+        print(f"  [Transformer] Moving data to {device.type.upper()}...")
         X_t = torch.tensor(X, dtype=torch.float32).unsqueeze(-1).to(device)
         y_t = torch.tensor(y, dtype=torch.float32).to(device)
 
+        batch_size = min(256, len(X))
+        dataset = torch.utils.data.TensorDataset(X_t, y_t)
+        pin_memory = torch.cuda.is_available() and X_t.device.type == 'cpu'
+        dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, pin_memory=pin_memory)
+
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
         criterion = nn.MSELoss()
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.5)
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=15, gamma=0.5)
         scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
 
+        print(f"  [Transformer] Training for {epochs} epochs...")
         model.train()
-        for _ in range(epochs):
-            optimizer.zero_grad()
-            with torch.cuda.amp.autocast(enabled=use_amp):
-                pred = model(X_t)
-                loss = criterion(pred, y_t)
+        for epoch in range(epochs):
+            for batch_X, batch_y in dataloader:
+                optimizer.zero_grad()
+                with torch.cuda.amp.autocast(enabled=use_amp):
+                    pred = model(batch_X)
+                    loss = criterion(pred, batch_y)
 
-            scaler.scale(loss).backward()
-            scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            scaler.step(optimizer)
-            scaler.update()
+                scaler.scale(loss).backward()
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                scaler.step(optimizer)
+                scaler.update()
             scheduler.step()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
         model.eval()
         with torch.no_grad():
@@ -391,6 +426,8 @@ class TransformerPredictor:
                 last_window = train_scaled[-self.lookback:]
                 last_input = torch.tensor(last_window, dtype=torch.float32).unsqueeze(0).unsqueeze(-1).to(device)
                 pred_scaled = model(last_input).cpu().numpy().flatten()
+        
+        clear_gpu_cache()
 
         forecast = self.scaler.inverse_transform(pred_scaled.reshape(-1, 1)).flatten()
 

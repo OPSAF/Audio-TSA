@@ -20,8 +20,8 @@ import numpy as np
 
 # Import from audiots package
 from audiots import (
-    loader, features, analysis, prediction, 
-    band_analysis, visualization
+    loader, features, dynamics, discovery, analysis, prediction,
+    band_analysis, visualization, similarity, similarity_viz, discovery_viz
 )
 
 
@@ -71,6 +71,12 @@ def main():
     print(f"[Info]  Sample rate: {sr} Hz, Length: {len(y1)} samples ({len(y1) / sr:.2f}s)")
     print()
 
+    sim_results = None
+    dual_results = {}
+    dyn1 = None
+    dyn2 = None
+    dyn_seg1 = None
+
     # ============================================================
     # Phase 1: Feature Extraction
     # ============================================================
@@ -96,6 +102,18 @@ def main():
     n_mels = mel_spec.shape[0]
     print(f"[Done]  Mel shape: {mel_spec.shape}, MFCC shape: {mfcc.shape}")
     print()
+
+    # ============================================================
+    # Phase 1.5: Audio Dynamics / Trend Analysis
+    # ============================================================
+    print("=" * 70)
+    print("  PHASE 1.5: AUDIO DYNAMICS / TREND ANALYSIS")
+    print("=" * 70)
+
+    print("[Dyn] Extracting dynamics (energy, brightness, complexity, rhythm)...")
+    dyn1 = dynamics.extract_dynamics(y1, sr, window_size=0.5, hop_size=0.25)
+    dyn_seg1 = dynamics.detect_structural_segments(dyn1)
+    dynamics.print_dynamics_report(dyn1, dyn_seg1)
 
     # ============================================================
     # Phase 2: Time Series Analysis
@@ -164,51 +182,51 @@ def main():
     print("=" * 70)
 
     band_results = band_analysis.analyze_band_predictability(
-        mel_spec, forecast_horizon=forecast_horizon)
+        mel_spec, forecast_horizon=forecast_horizon, 
+        parallel=True, epochs=15)
     
     band_summary = band_analysis.compute_band_error_summary(band_results)
     band_analysis.print_band_summary(band_summary)
+    band_analysis.print_detailed_band_results(band_results)
     print()
 
     # ============================================================
-    # Phase 5: Dual Audio Analysis (DTW + Similarity)
+    # Phase 5: Dual Audio Discovery (Multi-Dimensional Exploration)
     # ============================================================
+    disc_report = None
     if dual_audio:
         print("=" * 70)
-        print("  PHASE 5: DUAL AUDIO ANALYSIS (DTW + SIMILARITY)")
+        print("  PHASE 5: DUAL AUDIO DISCOVERY (Multi-Dimensional Exploration)")
         print("=" * 70)
 
-        mel_spec2, mfcc2 = None, None
-        try:
-            mel_freqs2, mel_times2, mel_spec2 = features.compute_mel_spectrogram(y2, sr, n_mels=128)
-            mfcc2, mfcc_times2 = features.compute_mfcc(y2, sr, n_mfcc=20)
-        except Exception as e:
-            print(f"  [Warning] Could not compute features for audio2: {e}")
+        disc_report = discovery.explore(
+            y1, sr, y2, sr,
+            window_size=0.5, hop_size=0.25, verbose=True,
+        )
+        discovery.print_discovery_report(disc_report)
 
-        # DTW analysis
+        # Also keep simple DTW for backward compatibility
+        dual_results = {}
         try:
             from dtw import dtw
             from scipy.spatial.distance import euclidean
-            
-            if mel_spec2 is not None:
-                mel1_mean = np.mean(mel_spec, axis=0)[:100]
-                mel2_mean = np.mean(mel_spec2, axis=0)[:100]
-                
-                dist, cost, acc_cost, path = dtw(
-                    mel1_mean.reshape(-1, 1), mel2_mean.reshape(-1, 1), dist=euclidean
-                )
-                similarity = 1 - dist / (len(mel1_mean) * np.std(mel1_mean))
-                
-                dual_results = {
-                    'dtw_distance': dist,
-                    'similarity': similarity,
-                    'dtw_path': path.tolist()
-                }
-                
-                print(f"  DTW Distance: {dist:.4f}")
-                print(f"  Similarity: {similarity * 100:.2f}%")
+            mel2_freqs, mel2_times, mel2_spec = features.compute_mel_spectrogram(y2, sr, n_mels=128)
+            mel1_mean = np.mean(mel_spec, axis=0)[:100]
+            mel2_mean = np.mean(mel2_spec, axis=0)[:100]
+            dtw_result = dtw(
+                mel1_mean.reshape(-1, 1), mel2_mean.reshape(-1, 1), dist_method=euclidean
+            )
+            dist = dtw_result.distance
+            path = np.column_stack((dtw_result.index1, dtw_result.index2))
+            dtw_similarity = 1 - dist / (len(mel1_mean) * np.std(mel1_mean))
+            dual_results = {
+                'dtw_distance': dist,
+                'similarity': dtw_similarity,
+                'dtw_path': path.tolist(),
+            }
+            print(f"\n  [Reference] DTW Distance: {dist:.4f}, Similarity: {dtw_similarity*100:.2f}%")
         except ImportError:
-            print("  [Info] DTW library not installed, skipping dual audio comparison")
+            print("  [Info] DTW library not installed")
             dual_results = {}
         except Exception as e:
             print(f"  [Warning] DTW analysis failed: {e}")
@@ -275,6 +293,38 @@ def main():
             series1_ds[:min_len], series2_ds[:min_len],
             dual_results.get('dtw_path', []),
             title=f"DTW Alignment (distance={dual_results.get('dtw_distance', 0):.2f})")
+
+    # Generate discovery plots (replaces similarity scoring)
+    if disc_report is not None:
+        print("\n  [6.13] Generating discovery visualizations ...")
+        disc_output_dir = os.path.join(args.output, 'discovery')
+        os.makedirs(disc_output_dir, exist_ok=True)
+        disc_plot_files = discovery_viz.generate_discovery_report_plots(
+            disc_report,
+            output_dir=disc_output_dir,
+            y1=y1, y2=y2, sr=sr,
+            dyn1=dyn1, dyn2=dyn2 if dual_audio else None,
+        )
+        for dp in disc_plot_files:
+            print(f"         discovery/{dp}")
+        fig_dict['13_discovery_summary'] = discovery_viz.plot_discovery_summary(
+            disc_report, title="Audio Discovery Summary")
+
+    # ---- Dynamics / Trend plots ----
+    if dyn1 is not None:
+        print("\n  [6.15] Generating dynamics trend plots...")
+        fig_dict['14_dynamics_trends'] = visualization.plot_dynamics_trends(
+            dyn1, segments=dyn_seg1,
+            title="Audio 1 — Dynamics Trend Analysis")
+        fig_dict['15_dynamics_summary'] = visualization.plot_dynamics_summary(
+            dyn1, segments=dyn_seg1,
+            title="Audio 1 — Dynamics Summary")
+
+        if dual_audio and dyn2 is not None:
+            dyn_sim_viz = dynamics.compute_dynamics_similarity(dyn1, dyn2)
+            fig_dict['16_dynamics_dual'] = visualization.plot_dynamics_dual(
+                dyn1, dyn2, sim_result=dyn_sim_viz,
+                title="Dual Audio — Dynamics Comparison")
 
     if not args.no_save:
         print(f"\n  Saving figures to '{args.output}'...")
