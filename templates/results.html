@@ -113,7 +113,11 @@
         .nav-btn:hover { background: var(--accent-soft); transform: translateY(-1px); box-shadow: 0 6px 20px var(--accent-glow); }
 
         /* Main Content */
-        .main-wrap { max-width: 1300px; margin: 0 auto; padding: 40px 24px 80px; }
+        .main-wrap {
+            max-width: 1300px; margin: 0 auto; padding: 40px 24px 80px;
+            display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(300px, 360px);
+            gap: 28px;
+        }
 
         /* Stats Grid — 毛玻璃卡片 */
         .stats-grid {
@@ -152,6 +156,65 @@
             border-radius: 22px; padding: 36px; margin-bottom: 28px;
             position: relative; overflow: hidden;
             transition: all 0.4s ease; opacity: 0; transform: translateY(20px);
+        }
+
+        .history-panel {
+            display: flex; flex-direction: column; gap: 18px;
+            min-height: 380px;
+        }
+
+        .history-card {
+            background: rgba(255, 255, 255, 0.08); border: 1px solid var(--glass-border);
+            border-radius: 20px; padding: 24px; box-shadow: var(--card-shadow);
+            backdrop-filter: blur(26px); -webkit-backdrop-filter: blur(26px);
+            display: flex; flex-direction: column; gap: 18px;
+        }
+
+        .history-title {
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 12px;
+            font-family: 'Cinzel', serif; font-size: 1.1rem; font-weight: 700;
+            color: var(--accent); letter-spacing: 1.5px;
+        }
+
+        .history-subtitle {
+            color: var(--text-muted); font-size: 0.92rem; line-height: 1.6;
+        }
+
+        .history-list {
+            display: grid; gap: 12px;
+            max-height: 400px; overflow-y: auto;
+        }
+        .history-list::-webkit-scrollbar { width: 7px; }
+        .history-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.14); border-radius: 999px; }
+
+        .history-item {
+            display: grid; grid-template-columns: 1fr auto;
+            gap: 12px; padding: 16px 18px; border-radius: 16px;
+            background: var(--bg-tertiary); border: 1px solid var(--border);
+            transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1), border-color 0.3s ease;
+        }
+        .history-item:hover {
+            transform: translateX(4px);
+            border-color: var(--border-hover);
+        }
+
+        .history-item strong {
+            display: block; font-size: 0.95rem; color: var(--text-primary);
+        }
+        .history-item span { font-size: 0.82rem; color: var(--text-secondary); }
+        .history-item .history-badge {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 8px 14px; border-radius: 999px;
+            border: 1px solid var(--border);
+            background: var(--accent-soft); color: var(--accent); font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+        }
+
+        .history-loading {
+            font-size: 0.95rem; color: var(--text-secondary); padding: 18px;
+            border: 1px dashed var(--border); border-radius: 16px;
+            text-align: center; background: var(--bg-secondary);
         }
         .section.visible { opacity: 1; transform: translateY(0); }
         .section:hover { border-color: var(--border-hover); box-shadow: var(--card-shadow); }
@@ -272,7 +335,7 @@
             .stats-grid { grid-template-columns: repeat(2, 1fr); }
             .plots-grid { grid-template-columns: 1fr; }
             .section { padding: 22px; border-radius: 16px; }
-            .main-wrap { padding: 24px 16px 50px; }
+            .main-wrap { display: block; padding: 24px 16px 50px; }
             .theme-switcher { top: 16px; right: 16px; width: 48px; height: 26px; }
             .theme-switcher::after { width: 20px; height: 20px; }
             [data-theme="light"] .theme-switcher::after { transform: translateX(22px); }
@@ -302,6 +365,8 @@
             border-radius: 4px;
             margin-bottom: 2px;
         }
+
+        .history-panel.visible { opacity: 1; transform: translateY(0); }
         .log-entry:hover {
             background: var(--accent-soft);
         }
@@ -409,6 +474,7 @@
             {% if results.get('dynamics') %}<a href="#sec-dynamics" class="nav-link">Dynamics</a>{% endif %}
             {% if results.get('volatility') %}<a href="#sec-volatility" class="nav-link">Volatility</a>{% endif %}
             <a href="#sec-log" class="nav-link">Log</a>
+            <a href="/docs" class="nav-btn"><i class="fas fa-book"></i> DOCS</a>
             <a href="{{ url_for('index') }}" class="nav-btn"><i class="fas fa-arrow-left"></i> NEW</a>
         </div>
     </nav>
@@ -439,6 +505,16 @@
                 <div class="stat-label">Forecast Steps</div>
             </div>
         </div>
+
+        <aside class="history-panel section" id="sec-history">
+            <div class="history-card">
+                <div class="history-title"><span><i class="fas fa-history"></i> HISTORICAL REPORTS</span><span class="history-badge" id="historyCount">--</span></div>
+                <div class="history-subtitle">自动读取 <code>static/outputs</code> 历史分析报告，并按最新时间排序显示。点击即可打开已生成的结果页面。</div>
+                <div class="history-list" id="historyList">
+                    <div class="history-loading">加载中，请稍候...</div>
+                </div>
+            </div>
+        </aside>
 
         <!-- Time Series Analysis -->
         <div class="section" id="sec-ts">
@@ -503,6 +579,13 @@
                 </div>
                 {% endif %}
 
+                {% if plot_urls.get('mfcc') %}
+                <div class="plot-box">
+                    <div class="plot-caption"><i class="fas fa-compact-disc"></i> MFCC Heatmap</div>
+                    <img src="{{ plot_urls.mfcc }}" alt="MFCC Coefficients" loading="lazy">
+                </div>
+                {% endif %}
+
                 {% if plot_urls.get('acf_pacf') %}
                 <div class="plot-box">
                     <div class="plot-caption"><i class="fas fa-chart-line"></i> ACF / PACF</div>
@@ -516,6 +599,18 @@
                     <img src="{{ plot_urls.periodicity }}" alt="Periodicity" loading="lazy">
                 </div>
                 {% endif %}
+
+                {% for key, url in plot_urls.items() %}
+                    {% if key not in ['waveform', 'fft_spectrum', 'stft_spectrogram', 'mel_spectrogram', 'mfcc', 'acf_pacf', 'periodicity', 'prediction_comparison', 'error_comparison', 'band_errors', 'band_error_bars']
+                          and not key.startswith('dynamics/')
+                          and not key.startswith('volatility/')
+                          and not key.startswith('discovery/') %}
+                    <div class="plot-box">
+                        <div class="plot-caption"><i class="fas fa-image"></i> {{ key.replace('_', ' ').title() }}</div>
+                        <img src="{{ url }}" alt="{{ key }}" loading="lazy">
+                    </div>
+                    {% endif %}
+                {% endfor %}
             </div>
         </div>
 
@@ -852,6 +947,44 @@
         document.querySelectorAll('.section, .stat-card').forEach(el => {
             el.style.transition = `all 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275)`;
             obs.observe(el);
+        });
+
+        // ---- Page State ----
+        async function loadHistory() {
+            const container = document.getElementById('historyList');
+            const countBadge = document.getElementById('historyCount');
+            try {
+                const response = await fetch('/results/history');
+                if (!response.ok) throw new Error('无法获取历史记录');
+                const history = await response.json();
+                countBadge.textContent = `${history.length} Reports`;
+
+                if (!history.length) {
+                    container.innerHTML = '<div class="history-loading">未找到历史报告。</div>';
+                    return;
+                }
+
+                container.innerHTML = history.map(item => {
+                    const name = item.audio1_name || item.task_id;
+                    const labels = item.analysis_options ? item.analysis_options.join(', ') : '默认选项';
+                    return `
+                        <a class="history-item" href="/results/${item.task_id}">
+                            <div>
+                                <strong>${name}</strong>
+                                <span>${item.created_at} · ${labels}</span>
+                            </div>
+                            <div class="history-badge">${item.task_id}</div>
+                        </a>
+                    `;
+                }).join('');
+            } catch (error) {
+                countBadge.textContent = 'Error';
+                container.innerHTML = `<div class="history-loading">读取历史报告失败：${error.message}</div>`;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadHistory();
         });
 
         // ---- Download Log ----

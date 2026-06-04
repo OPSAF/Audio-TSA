@@ -336,6 +336,26 @@
             animation: heroFadeSlideUp 0.8s ease-out 0.75s forwards;
         }
 
+        .hero-docs-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 28px;
+            font-size: 0.95rem;
+            color: #fff;
+            background: linear-gradient(135deg, var(--accent), var(--accent-light));
+            border-radius: 999px;
+            text-decoration: none;
+            box-shadow: 0 12px 30px rgba(255, 107, 0, 0.22);
+            opacity: 0;
+            animation: heroFadeSlideUp 0.8s ease-out 0.8s forwards;
+        }
+
+        .hero-docs-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 16px 36px rgba(255, 107, 0, 0.28);
+        }
+
         @keyframes heroFadeSlideUp {
             from { opacity: 0; transform: translateY(40px); }
             to { opacity: 1; transform: translateY(0); }
@@ -943,6 +963,7 @@
                 融合特征提取、时序分析、无监督模式发现与机器学习预测，
                 为音频信号提供全链路深度洞察。
             </p>
+            <a href="/docs" class="hero-docs-btn"><i class="fas fa-book-open"></i> 阅读使用手册</a>
         </div>
 
         <div class="scroll-hint" onclick="document.querySelector('.main-section').scrollIntoView({behavior:'smooth'})">

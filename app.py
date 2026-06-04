@@ -8,7 +8,7 @@ import time
 import threading
 import numpy as np
 from queue import Queue
-from flask import Flask, render_template, request, redirect, url_for, Response, stream_with_context
+from flask import Flask, render_template, request, redirect, url_for, Response, stream_with_context, jsonify
 
 # Import our audio analysis package
 from audiots import loader, features, dynamics, volatility, model_analysis, discovery, unsupervised, analysis, prediction, band_analysis, visualization
@@ -466,7 +466,9 @@ def index():
         task_info = {
             'task_id': task_id,
             'filepath1': filepath1,
+            'filepath1_name': os.path.basename(filepath1),
             'filepath2': filepath2,
+            'filepath2_name': os.path.basename(filepath2) if filepath2 else None,
             'forecast_horizon': forecast_horizon,
             'n_mels': n_mels,
             'analysis_options': analysis_options,
@@ -789,6 +791,50 @@ def stream(task_id):
     return Response(stream_with_context(generate()), mimetype='text/event-stream')
 
 
+@app.route('/results/history')
+def results_history():
+    """Return JSON list of historical result tasks."""
+    output_root = app.config['OUTPUT_FOLDER']
+    history = []
+
+    if os.path.exists(output_root):
+        task_dirs = []
+        for task_id in os.listdir(output_root):
+            output_dir = os.path.join(output_root, task_id)
+            if not os.path.isdir(output_dir):
+                continue
+            task_dirs.append((task_id, os.path.getmtime(output_dir)))
+
+        for task_id, _ in sorted(task_dirs, key=lambda item: item[1], reverse=True):
+            output_dir = os.path.join(output_root, task_id)
+            results_file = os.path.join(output_dir, 'results.json')
+            if not os.path.exists(results_file):
+                continue
+
+            entry = {'task_id': task_id}
+            task_info_file = os.path.join(output_dir, 'task_info.json')
+            if os.path.exists(task_info_file):
+                try:
+                    with open(task_info_file, 'r', encoding='utf-8') as f:
+                        info = json.load(f)
+                    entry['audio1_name'] = info.get('audio1_name', info.get('filepath1_name', 'Unknown'))
+                    entry['analysis_options'] = info.get('analysis_options', [])
+                    entry['forecast_horizon'] = info.get('forecast_horizon')
+                except Exception:
+                    entry['audio1_name'] = 'Unknown'
+                    entry['analysis_options'] = []
+                    entry['forecast_horizon'] = None
+            else:
+                entry['audio1_name'] = 'Unknown'
+                entry['analysis_options'] = []
+                entry['forecast_horizon'] = None
+
+            entry['created_at'] = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(os.path.getmtime(output_dir)))
+            history.append(entry)
+
+    return jsonify(history)
+
+
 @app.route('/results/<task_id>')
 def results(task_id):
     """Display analysis results."""
@@ -818,6 +864,7 @@ def secure_filename(filename):
     return re.sub(r'[^a-zA-Z0-9_\-\.]', '_', filename)
 
 
+@app.route('/docs')
 @app.route('/docs/')
 @app.route('/docs/<page>')
 def docs(page=None):
@@ -852,7 +899,9 @@ def docs(page=None):
 返回 [主页](/) | [项目 GitHub](https://github.com/OPSAF/Audio-TSA)
 """
         html = markdown.markdown(md_content, extensions=['tables', 'fenced_code'])
-        return render_template('docs.html', content=html, title='文档', page=page)
+        if request.args.get('ajax') == '1':
+            return jsonify({'title': '文档', 'content': html, 'page': 'index'})
+        return render_template('docs.html', content=html, title='文档', page='index')
 
     if page not in doc_files:
         return "文档页面不存在", 404
@@ -873,7 +922,11 @@ def docs(page=None):
         'results': '结果解读',
     }
 
-    return render_template('docs.html', content=html, title=titles.get(page, page), page=page)
+    title = titles.get(page, page)
+    if request.args.get('ajax') == '1':
+        return jsonify({'title': title, 'content': html, 'page': page})
+
+    return render_template('docs.html', content=html, title=title, page=page)
 
 
 if __name__ == '__main__':

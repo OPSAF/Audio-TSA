@@ -451,6 +451,11 @@ def generate_report_plots(analysis_results, output_dir='outputs'):
                              analysis_results['mel']['spec'],
                              os.path.join(output_dir, 'mel_spectrogram.png'))
 
+    if 'mfcc' in analysis_results:
+        plot_mfcc(analysis_results['mfcc']['mfcc'],
+                  analysis_results['mfcc']['times'],
+                  os.path.join(output_dir, 'mfcc.png'))
+
     if 'acf_pacf' in analysis_results:
         plot_acf_pacf(analysis_results['acf_pacf']['lags'],
                       analysis_results['acf_pacf']['acf'],
@@ -476,6 +481,8 @@ def generate_report_plots(analysis_results, output_dir='outputs'):
     if 'band_summary' in analysis_results:
         plot_band_errors(analysis_results['band_summary'],
                          os.path.join(output_dir, 'band_errors.png'))
+        plot_band_error_bars(analysis_results['band_summary'],
+                             os.path.join(output_dir, 'band_error_bars.png'))
 
     return [f for f in os.listdir(output_dir) if f.endswith('.png')]
 
