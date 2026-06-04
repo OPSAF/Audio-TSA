@@ -33,16 +33,17 @@ import numpy as np
 
 # Import from audiots package
 from audiots import (
-    loader, features, dynamics, discovery, unsupervised, analysis, prediction,
-    band_analysis, visualization, similarity, similarity_viz, discovery_viz
+    loader, features, dynamics, volatility, model_analysis, discovery, unsupervised,
+    analysis, prediction, band_analysis, visualization, similarity, similarity_viz,
+    discovery_viz
 )
 
 
 def parse_analysis_options(args):
     """Parse analysis options from command line."""
     available_options = [
-        'features', 'dynamics', 'timeseries', 'unsupervised', 
-        'prediction', 'band', 'comparison', 'visualization'
+        'features', 'dynamics', 'dynamics_analysis', 'model_analysis', 'timeseries',
+        'unsupervised', 'prediction', 'band', 'comparison', 'visualization'
     ]
     
     if args.analysis:
@@ -56,8 +57,8 @@ def parse_analysis_options(args):
         return selected
     
     # Default: all analyses except comparison (unless dual audio)
-    defaults = ['features', 'dynamics', 'timeseries', 'unsupervised', 
-                'prediction', 'band', 'visualization']
+    defaults = ['features', 'dynamics', 'dynamics_analysis', 'model_analysis',
+                'timeseries', 'unsupervised', 'prediction', 'band', 'visualization']
     return defaults
 
 
@@ -69,6 +70,7 @@ def main():
 Analysis options (--analysis):
   features     - Feature extraction (waveform, FFT, STFT, Mel, MFCC)
   dynamics     - Audio dynamics/trend analysis
+  dynamics_analysis - Trend Layer + Volatility Layer (ARCH/GARCH) + predictions
   timeseries   - Time series analysis (ACF, PACF, periodicity, complexity)
   unsupervised - Unsupervised pattern discovery
   prediction   - ML prediction (ARIMA, HMM, LSTM, Transformer)
@@ -210,6 +212,60 @@ Example:
         print()
 
     # ============================================================
+    # Phase 1.6: Dynamics Analysis — Volatility Layer
+    # ============================================================
+    vol1 = None
+    if 'dynamics_analysis' in analysis_options:
+        print("=" * 70)
+        print("  PHASE 1.6: AUDIO DYNAMICS ANALYSIS (Volatility + GARCH)")
+        print("=" * 70)
+
+        # Ensure dynamics are extracted first
+        if dyn1 is None:
+            print("[Dyn] Extracting dynamics first...")
+            dyn1 = dynamics.extract_dynamics(y1, sr, window_size=0.5, hop_size=0.25)
+            results['dynamics'] = {'data': dyn1, 'segments': None}
+
+        # ---- Volatility Layer ----
+        print("[Vol] Computing rolling volatility + GARCH(1,1)...")
+        vol1 = volatility.compute_volatility_layer(dyn1, rolling_window=10, fit_garch=True)
+        volatility.print_volatility_report(vol1, show_garch=True)
+
+        # ---- Trend predictions ----
+        print("[TrendPred] Predicting all 4 trends...")
+        trend_preds = prediction.predict_all_trends(dyn1, forecast_horizon=20, verbose=True)
+        results['trend_predictions'] = trend_preds
+
+        # ---- Volatility predictions ----
+        print("[VolPred] Predicting volatility...")
+        vol_preds = prediction.predict_all_volatilities(vol1, forecast_horizon=10, verbose=True)
+        results['volatility_predictions'] = vol_preds
+
+        results['volatility'] = vol1
+        print()
+
+    # ============================================================
+    # Phase 2a: Model Ensemble Structural Analysis
+    # ============================================================
+    if 'model_analysis' in analysis_options:
+        print("=" * 70)
+        print("  PHASE 2a: MODEL ENSEMBLE STRUCTURAL ANALYSIS")
+        print("=" * 70)
+
+        # Ensure dynamics are extracted
+        if dyn1 is None:
+            print("[Dyn] Extracting dynamics first...")
+            dyn1 = dynamics.extract_dynamics(y1, sr, window_size=0.5, hop_size=0.25)
+            results['dynamics'] = {'data': dyn1, 'segments': None}
+
+        print("[Model] Running 4-model structural detective analysis...")
+        model_report = model_analysis.analyze_model_ensemble(
+            dyn1, n_hmm_states=3, lstm_epochs=20, transformer_epochs=20, verbose=True)
+        model_analysis.print_model_ensemble_report(model_report)
+        results['model_analysis'] = model_report
+        print()
+
+    # ============================================================
     # Phase 2: Time Series Analysis
     # ============================================================
     if 'timeseries' in analysis_options:
@@ -329,6 +385,21 @@ Example:
         )
         discovery.print_discovery_report(disc_report)
         results['comparison']['discovery'] = disc_report
+
+        # ---- Volatility similarity (if dynamics_analysis was also run) ----
+        if vol1 is not None and dyn2 is not None:
+            print("-" * 70)
+            print("  [Comp] Volatility similarity...")
+            vol2 = volatility.compute_volatility_layer(dyn2, rolling_window=10, fit_garch=True)
+            vol_sim = volatility.compute_volatility_similarity(vol1, vol2)
+            volatility.print_volatility_similarity_report(vol_sim)
+            results['comparison']['volatility_similarity'] = vol_sim
+
+            print("  [Comp] Dynamics similarity...")
+            dyn_sim = dynamics.compute_dynamics_similarity(dyn1, dyn2)
+            dynamics.print_dynamics_similarity_report(dyn_sim)
+            results['comparison']['dynamics_similarity'] = dyn_sim
+
         print()
 
     # ============================================================
@@ -439,6 +510,31 @@ Example:
                 fig_dict['16_dynamics_dual'] = visualization.plot_dynamics_dual(
                     dyn1, dyn2, sim_result=dyn_sim_viz,
                     title="Dual Audio — Dynamics Comparison")
+
+        if 'dynamics_analysis' in analysis_options and vol1 is not None and dyn1 is not None:
+            print("\n  [6.16] Generating volatility analysis plots...")
+            fig_dict['17_volatility_layer'] = visualization.plot_volatility_layer(
+                dyn1, vol1,
+                title="Audio 1 — Volatility Layer")
+            fig_dict['18_garch_energy'] = visualization.plot_garch_diagnostics(
+                vol1, trend_key='energy',
+                title="GARCH(1,1) — Energy Trend Volatility")
+            fig_dict['19_dynamics_analysis_summary'] = visualization.plot_dynamics_analysis_summary(
+                {'trend_summary': dynamics.summarize_dynamics(dyn1),
+                 'volatility_summary': volatility.summarize_volatility(vol1)},
+                title="Dynamics Analysis — Trend + Volatility Summary")
+
+            if dual_audio and dyn2 is not None:
+                vol2_for_viz = volatility.compute_volatility_layer(dyn2, rolling_window=10, fit_garch=True)
+                vol_sim_for_viz = None
+                if 'comparison' in results and isinstance(results['comparison'], dict):
+                    vol_sim_for_viz = results['comparison'].get('volatility_similarity')
+                if vol_sim_for_viz is None:
+                    vol_sim_for_viz = volatility.compute_volatility_similarity(vol1, vol2_for_viz)
+                fig_dict['20_volatility_comparison'] = visualization.plot_volatility_comparison(
+                    vol1, vol2_for_viz,
+                    sim_result=vol_sim_for_viz,
+                    title="Dual Audio — Volatility Comparison")
 
         if not args.no_save:
             print(f"\n  Saving figures to '{args.output}'...")

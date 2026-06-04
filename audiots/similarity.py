@@ -1064,3 +1064,57 @@ def print_similarity_report(results: Dict):
                   f"{ann['similarity']:.3f}  {ann['rhythm']:<30s}  {ann['energy']:<20s}")
     print("=" * 70)
     print()
+
+
+# ---------------------------------------------------------------------------
+# 7. Volatility similarity (bridge to volatility.py)
+# ---------------------------------------------------------------------------
+
+def compute_volatility_similarity(
+    vol1: Dict,
+    vol2: Dict,
+) -> Dict:
+    """
+    Compute similarity of volatility structure between two audio files.
+
+    This is a bridge to ``volatility.compute_volatility_similarity()``.
+    It accepts volatility layer dicts and returns a score suitable for
+    blending into the global similarity aggregation.
+
+    Parameters
+    ----------
+    vol1, vol2 : dict    Outputs of ``volatility.compute_volatility_layer()``.
+
+    Returns
+    -------
+    scores : dict
+        ``global_volatility_similarity`` : float 0–100 (%)
+        ``per_trend`` : dict  trend_key → similarity sub-scores
+    """
+    from .volatility import compute_volatility_similarity as _vol_sim
+    return _vol_sim(vol1, vol2)
+
+
+def blend_volatility_into_similarity(
+    base_similarity: float,       # 0–100, from aggregate_similarity
+    volatility_similarity: float, # 0–100, from compute_volatility_similarity
+    vol_weight: float = 0.15,
+) -> float:
+    """
+    Blend volatility similarity into the base global similarity score.
+
+    Parameters
+    ----------
+    base_similarity : float        Global similarity % from the main pipeline.
+    volatility_similarity : float  Volatility similarity %.
+    vol_weight : float             Weight for the volatility component
+                                   (default 0.15 means 85 % base, 15 % vol).
+
+    Returns
+    -------
+    blended : float  0–100 (%).
+    """
+    return float(np.clip(
+        (1.0 - vol_weight) * base_similarity + vol_weight * volatility_similarity,
+        0.0, 100.0,
+    ))

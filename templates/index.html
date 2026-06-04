@@ -3,792 +3,1034 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>音频时间序列分析系统</title>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <title>Audio Lab — 音频时间序列分析系统</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        /* ============================================
+           CSS VARIABLES — 双主题色系
+           ============================================ */
         :root {
-            --primary: #ff6b00;
-            --primary-light: #ff8c00;
-            --bg-main: #0a0a0a;
-            --bg-card: linear-gradient(145deg, #141414, #1a1a1a);
-            --text-primary: #ffffff;
-            --text-secondary: rgba(255, 255, 255, 0.6);
-            --border-color: rgba(255, 107, 0, 0.2);
-            --glow-color: rgba(255, 107, 0, 0.15);
+            /* 暗黑模式（默认） */
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #121218;
+            --bg-tertiary: #1a1a24;
+            --bg-elevated: rgba(26, 26, 36, 0.7);
+            --text-primary: #f0f0f5;
+            --text-secondary: rgba(240, 240, 245, 0.55);
+            --text-muted: rgba(240, 240, 245, 0.35);
+            --accent: #FF6B00;
+            --accent-light: #ff8c33;
+            --accent-dark: #cc5500;
+            --accent-glow: rgba(255, 107, 0, 0.25);
+            --accent-soft: rgba(255, 107, 0, 0.08);
+            --border: rgba(255, 107, 0, 0.12);
+            --border-hover: rgba(255, 107, 0, 0.35);
+            --glass-bg: rgba(18, 18, 24, 0.6);
+            --glass-border: rgba(255, 255, 255, 0.06);
+            --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            --card-shadow: 0 4px 24px rgba(0, 0, 0, 0.3), 0 0 60px var(--accent-glow);
+            --hero-gradient: linear-gradient(160deg, #0a0a0f 0%, #121218 40%, #0d0815 100%);
+            --noise-opacity: 0.03;
         }
 
         [data-theme="light"] {
-            --primary: #dc2626;
-            --primary-light: #ef4444;
-            --bg-main: #f8fafc;
-            --bg-card: linear-gradient(145deg, #ffffff, #f1f5f9);
-            --text-primary: #1e293b;
-            --text-secondary: rgba(30, 41, 59, 0.6);
-            --border-color: rgba(220, 38, 38, 0.2);
-            --glow-color: rgba(220, 38, 38, 0.08);
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8f9fc;
+            --bg-tertiary: #eef0f6;
+            --bg-elevated: rgba(255, 255, 255, 0.8);
+            --text-primary: #1a1a28;
+            --text-secondary: rgba(26, 26, 40, 0.55);
+            --text-muted: rgba(26, 26, 40, 0.35);
+            --accent: #FF2A55;
+            --accent-light: #ff4d73;
+            --accent-dark: #cc2244;
+            --accent-glow: rgba(255, 42, 85, 0.15);
+            --accent-soft: rgba(255, 42, 85, 0.06);
+            --border: rgba(255, 42, 85, 0.12);
+            --border-hover: rgba(255, 42, 85, 0.35);
+            --glass-bg: rgba(255, 255, 255, 0.65);
+            --glass-border: rgba(0, 0, 0, 0.06);
+            --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+            --card-shadow: 0 4px 24px rgba(0, 0, 0, 0.06), 0 0 60px var(--accent-glow);
+            --hero-gradient: linear-gradient(160deg, #ffffff 0%, #f0f2f8 40%, #fafbff 100%);
+            --noise-opacity: 0.02;
         }
 
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        /* ============================================
+           RESET & BASE
+           ============================================ */
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html { scroll-behavior: smooth; }
 
         body {
-            font-family: 'Rajdhani', 'Segoe UI', sans-serif;
-            background: var(--bg-main);
+            font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
             color: var(--text-primary);
             overflow-x: hidden;
             min-height: 100vh;
-            transition: all 0.5s ease;
-        }
-
-        .theme-toggle {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 10000;
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            border: 2px solid var(--primary);
-            background: var(--bg-card);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px var(--glow-color);
-        }
-
-        .theme-toggle:hover {
-            transform: scale(1.1) rotate(180deg);
-            box-shadow: 0 8px 25px var(--glow-color);
-        }
-
-        .theme-toggle i {
-            font-size: 20px;
-            color: var(--primary);
-            transition: all 0.3s ease;
-        }
-
-        .kv-section {
+            transition: background 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+                        color 0.6s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
-            height: 100vh;
-            min-height: 600px;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+            pointer-events: none;
+            z-index: 99999;
+            opacity: var(--noise-opacity);
+        }
+
+        ::selection {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        /* ============================================
+           THEME TOGGLE — 优雅切换按钮
+           ============================================ */
+        .theme-switcher {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            z-index: 100000;
+            width: 56px;
+            height: 30px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+            position: relative;
+            outline: none;
+            appearance: none;
+            -webkit-appearance: none;
+        }
+
+        .theme-switcher {
+            background: var(--bg-tertiary);
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.2),
+                        0 0 0 2px var(--border);
+        }
+
+        .theme-switcher::after {
+            content: '';
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent), var(--accent-light));
+            transition: transform 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+            box-shadow: 0 2px 10px var(--accent-glow);
+        }
+
+        [data-theme="light"] .theme-switcher::after {
+            transform: translateX(26px);
+        }
+
+        .theme-switcher:hover {
+            transform: scale(1.05);
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.2),
+                        0 0 0 2px var(--accent),
+                        0 0 20px var(--accent-glow);
+        }
+
+        .theme-label {
+            position: fixed;
+            top: 58px;
+            right: 16px;
+            z-index: 100000;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            transition: color 0.4s;
+            pointer-events: none;
+        }
+
+        /* ============================================
+           HERO SECTION — 大厂游戏官网风格
+           ============================================ */
+        .hero {
+            position: relative;
+            min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
             overflow: hidden;
-            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #0d0d0d 100%);
-            transition: all 0.5s ease;
+            background: var(--hero-gradient);
+            transition: background 0.6s ease;
         }
 
-        [data-theme="light"] .kv-section {
-            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #f1f5f9 100%);
-        }
-
-        .kv-bg-particles { position: absolute; width: 100%; height: 100%; top: 0; left: 0; }
-
-        .particle {
+        /* 背景光球 */
+        .hero-orb {
             position: absolute;
-            width: 4px;
-            height: 4px;
-            background: var(--primary);
             border-radius: 50%;
-            opacity: 0.6;
-            animation: floatParticle 8s infinite ease-in-out;
+            filter: blur(120px);
+            opacity: 0;
+            animation: orbFadeIn 2s ease-out forwards;
         }
 
-        @keyframes floatParticle {
-            0%, 100% { transform: translateY(0) translateX(0); opacity: 0.6; }
-            25% { transform: translateY(-100px) translateX(50px); opacity: 1; }
-            50% { transform: translateY(-200px) translateX(-30px); opacity: 0.4; }
-            75% { transform: translateY(-150px) translateX(80px); opacity: 0.8; }
+        @keyframes orbFadeIn { to { opacity: 1; } }
+
+        .hero-orb--1 {
+            width: 600px; height: 600px;
+            background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+            top: -10%; right: -5%;
+            animation-delay: 0.2s;
+        }
+        .hero-orb--2 {
+            width: 400px; height: 400px;
+            background: radial-gradient(circle, rgba(140, 80, 255, 0.12) 0%, transparent 70%);
+            bottom: 10%; left: -5%;
+            animation-delay: 0.6s;
+        }
+        .hero-orb--3 {
+            width: 300px; height: 300px;
+            background: radial-gradient(circle, var(--accent-soft) 0%, transparent 70%);
+            top: 50%; left: 45%;
+            animation-delay: 1s;
         }
 
-        .wave-line {
+        /* 网格线背景 */
+        .hero-grid {
             position: absolute;
-            width: 200%;
-            height: 2px;
-            left: -50%;
-            background: linear-gradient(90deg, transparent, var(--primary), var(--primary-light), var(--primary), transparent);
-            animation: waveMove 4s infinite linear;
+            inset: 0;
+            background-image:
+                linear-gradient(var(--border) 1px, transparent 1px),
+                linear-gradient(90deg, var(--border) 1px, transparent 1px);
+            background-size: 80px 80px;
+            mask-image: radial-gradient(ellipse at center, black 30%, transparent 70%);
+            -webkit-mask-image: radial-gradient(ellipse at center, black 30%, transparent 70%);
+            opacity: 0.4;
         }
 
-        .wave-line:nth-child(1) { top: 20%; animation-delay: 0s; opacity: 0.3; }
-        .wave-line:nth-child(2) { top: 40%; animation-delay: 1s; opacity: 0.5; }
-        .wave-line:nth-child(3) { top: 60%; animation-delay: 2s; opacity: 0.4; }
-        .wave-line:nth-child(4) { top: 80%; animation-delay: 3s; opacity: 0.3; }
-
-        @keyframes waveMove { 0% { transform: translateX(-30%); } 100% { transform: translateX(30%); } }
-
-        .kv-glow-orb {
+        /* 波纹线条 */
+        .hero-waves {
             position: absolute;
-            width: 400px;
-            height: 400px;
-            border-radius: 50%;
-            filter: blur(80px);
+            inset: 0;
+            overflow: hidden;
+        }
+        .hero-wave-line {
+            position: absolute;
+            width: 150%; height: 1px;
+            left: -25%;
+            background: linear-gradient(90deg, transparent, var(--accent), var(--accent-light), var(--accent), transparent);
             opacity: 0.15;
-            animation: orbPulse 6s infinite ease-in-out;
+            animation: waveDrift 6s infinite linear;
+        }
+        .hero-wave-line:nth-child(1) { top: 25%; animation-duration: 7s; }
+        .hero-wave-line:nth-child(2) { top: 50%; animation-duration: 9s; animation-delay: 1.5s; opacity: 0.1; }
+        .hero-wave-line:nth-child(3) { top: 75%; animation-duration: 8s; animation-delay: 3s; opacity: 0.12; }
+
+        @keyframes waveDrift {
+            from { transform: translateX(-40%); }
+            to { transform: translateX(40%); }
         }
 
-        .kv-glow-orb.orange { 
-            background: radial-gradient(circle, var(--primary), transparent);
-            top: 10%; right: 10%;
-        }
-        
-        .kv-glow-orb.orange2 { 
-            background: radial-gradient(circle, var(--primary-light), transparent);
-            bottom: 10%; left: 10%; animation-delay: 3s;
-        }
-
-        @keyframes orbPulse {
-            0%, 100% { transform: scale(1); opacity: 0.15; }
-            50% { transform: scale(1.3); opacity: 0.25; }
+        /* 主内容区 */
+        .hero-content {
+            position: relative;
+            z-index: 10;
+            text-align: center;
+            padding: 40px 24px;
+            max-width: 800px;
         }
 
-        .kv-content { text-align: center; z-index: 10; padding: 40px; }
+        /* 艺术字大标题 */
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 20px;
+            border-radius: 30px;
+            background: var(--accent-soft);
+            border: 1px solid var(--border);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--accent);
+            margin-bottom: 36px;
+            opacity: 0;
+            animation: heroFadeSlideUp 0.8s ease-out 0.3s forwards;
+        }
 
-        .kv-title-main {
-            font-family: 'Orbitron', monospace;
-            font-size: clamp(2.5rem, 7vw, 5rem);
+        .hero-badge i { font-size: 0.7rem; }
+
+        .hero-title {
+            font-family: 'Cinzel', serif;
+            font-size: clamp(3rem, 9vw, 7rem);
             font-weight: 900;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 30%, #ffa500 60%, var(--primary) 100%);
-            background-size: 300% auto;
+            line-height: 1.05;
+            letter-spacing: -0.02em;
+            margin-bottom: 24px;
+            opacity: 0;
+            animation: heroFadeSlideUp 0.9s ease-out 0.5s forwards;
+        }
+
+        .hero-title .line {
+            display: block;
+        }
+
+        .hero-title .line--main {
+            background: linear-gradient(
+                135deg,
+                var(--accent) 0%,
+                var(--accent-light) 35%,
+                #ffa366 65%,
+                var(--accent) 100%
+            );
+            background-size: 250% auto;
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-            animation: titleShine 4s linear infinite, titleFloat 3s ease-in-out infinite;
-            letter-spacing: 4px;
-            margin-bottom: 10px;
+            animation: titleShimmer 5s linear infinite;
+            filter: drop-shadow(0 0 40px var(--accent-glow));
         }
 
-        [data-theme="light"] .kv-title-main {
-            background: linear-gradient(135deg, #dc2626 0%, #ef4444 30%, #f97316 60%, #dc2626 100%);
-            background-size: 300% auto;
+        [data-theme="light"] .hero-title .line--main {
+            background: linear-gradient(
+                135deg,
+                var(--accent) 0%,
+                var(--accent-light) 35%,
+                #ff8899 65%,
+                var(--accent) 100%
+            );
+            background-size: 250% auto;
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
         }
 
-        @keyframes titleShine { to { background-position: 300% center; } }
-
-        @keyframes titleFloat {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-15px); }
+        @keyframes titleShimmer {
+            to { background-position: 250% center; }
         }
 
-        .kv-subtitle {
-            font-family: 'Rajdhani', sans-serif;
-            font-size: clamp(1rem, 2.5vw, 1.5rem);
-            color: var(--text-secondary);
+        .hero-title .line--sub {
+            font-family: 'Outfit', sans-serif;
             font-weight: 300;
-            letter-spacing: 4px;
-            margin-bottom: 40px;
-            animation: fadeInUp 1s ease-out 0.5s both;
+            font-size: 0.38em;
+            letter-spacing: 0.25em;
+            color: var(--text-secondary);
+            margin-top: 12px;
+            -webkit-text-fill-color: initial;
+            background: none;
+            filter: none;
         }
 
-        @keyframes fadeInUp {
-            from { opacity: 0; transform: translateY(30px); }
+        .hero-desc {
+            font-family: 'Outfit', sans-serif;
+            font-size: clamp(1rem, 2vw, 1.25rem);
+            font-weight: 300;
+            color: var(--text-secondary);
+            line-height: 1.7;
+            max-width: 550px;
+            margin: 0 auto 48px;
+            opacity: 0;
+            animation: heroFadeSlideUp 0.8s ease-out 0.75s forwards;
+        }
+
+        @keyframes heroFadeSlideUp {
+            from { opacity: 0; transform: translateY(40px); }
             to { opacity: 1; transform: translateY(0); }
         }
 
-        .kv-tagline {
-            font-size: 1.2rem;
-            color: var(--primary);
-            font-weight: 600;
-            letter-spacing: 4px;
-            margin-bottom: 50px;
-            animation: fadeInUp 1s ease-out 0.8s both;
-        }
-
-        .scroll-indicator {
+        /* 向下滚动指示器 */
+        .scroll-hint {
             position: absolute;
-            bottom: 40px;
+            bottom: 36px;
             left: 50%;
             transform: translateX(-50%);
-            animation: bounce 2s infinite;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
             z-index: 10;
+            opacity: 0;
+            animation: heroFadeSlideUp 0.6s ease-out 1.2s forwards;
         }
 
-        .scroll-indicator i { font-size: 24px; color: var(--primary); }
-
-        @keyframes bounce {
-            0%, 20%, 50%, 80%, 100% { transform: translateX(-50%) translateY(0); }
-            40% { transform: translateX(-50%) translateY(-20px); }
-            60% { transform: translateX(-50%) translateY(-10px); }
+        .scroll-hint span {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--text-muted);
         }
 
-        .main-section {
-            background: var(--bg-main);
-            padding: 80px 20px;
+        .scroll-hint .mouse-icon {
+            width: 22px; height: 34px;
+            border: 2px solid var(--text-muted);
+            border-radius: 11px;
             position: relative;
-            transition: all 0.5s ease;
         }
 
-        .main-container { max-width: 1100px; margin: 0 auto; }
+        .scroll-hint .mouse-dot {
+            position: absolute;
+            top: 6px; left: 50%;
+            transform: translateX(-50%);
+            width: 3px; height: 6px;
+            background: var(--accent);
+            border-radius: 2px;
+            animation: mouseScroll 1.8s ease-in-out infinite;
+        }
+
+        @keyframes mouseScroll {
+            0%, 100% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            50% { opacity: 0.3; transform: translateX(-50%) translateY(10px); }
+        }
+
+        /* ============================================
+           MAIN SECTION — 上传与分析区域
+           ============================================ */
+        .main-section {
+            padding: 100px 24px 80px;
+            position: relative;
+            background: var(--bg-primary);
+            transition: background 0.6s ease;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 64px;
+        }
+
+        .section-tag {
+            display: inline-block;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            color: var(--accent);
+            padding-bottom: 14px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 20px;
+        }
 
         .section-title {
-            font-family: 'Orbitron', monospace;
-            font-size: 2rem;
-            color: var(--primary);
-            text-align: center;
-            margin-bottom: 50px;
-            position: relative;
-            letter-spacing: 3px;
+            font-family: 'Cinzel', serif;
+            font-size: clamp(1.8rem, 4vw, 2.8rem);
+            font-weight: 700;
+            color: var(--text-primary);
+            line-height: 1.2;
         }
 
-        .section-title::after {
-            content: '';
-            position: absolute;
-            bottom: -15px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 80px;
-            height: 3px;
-            background: linear-gradient(90deg, transparent, var(--primary), transparent);
-        }
-
+        /* 毛玻璃上传卡片 */
         .upload-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 20px;
-            padding: 45px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            background: var(--glass-bg);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 48px;
+            box-shadow: var(--glass-shadow);
             position: relative;
             overflow: hidden;
+            transition: all 0.4s ease;
         }
 
-        [data-theme="light"] .upload-card {
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 1);
+        .upload-card:hover {
+            border-color: var(--border-hover);
+            box-shadow: var(--card-shadow);
         }
 
         .upload-card::before {
             content: '';
             position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 2px;
-            background: linear-gradient(90deg, transparent, var(--primary), transparent);
-            animation: cardScan 3s infinite linear;
+            top: 0; left: 0; right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--accent), transparent);
+            opacity: 0.5;
         }
 
-        @keyframes cardScan { to { left: 100%; } }
+        /* 表单标签 */
+        .form-group { margin-bottom: 28px; }
 
-        .upload-card:hover {
-            transform: translateY(-5px);
-            border-color: var(--primary);
-            box-shadow: 0 30px 80px var(--glow-color), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-        }
-
-        .form-label-custom {
-            color: var(--text-primary);
-            font-weight: 600;
-            font-size: 1rem;
-            letter-spacing: 1px;
-            margin-bottom: 12px;
+        .form-label {
             display: flex;
             align-items: center;
             gap: 10px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            color: var(--text-primary);
+            margin-bottom: 14px;
+            letter-spacing: 0.5px;
         }
 
-        .form-label-custom i { color: var(--primary); font-size: 1.1rem; }
+        .form-label i {
+            width: 28px; height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--accent-soft);
+            border-radius: 8px;
+            color: var(--accent);
+            font-size: 0.85rem;
+        }
 
-        .file-upload-zone {
-            border: 2px dashed var(--border-color);
+        /* 文件上传区域 */
+        .upload-zone {
+            border: 2px dashed var(--border);
             border-radius: 16px;
-            padding: 35px;
+            padding: 36px 24px;
             text-align: center;
             cursor: pointer;
-            transition: all 0.3s ease;
-            background: var(--glow-color);
+            transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            background: var(--accent-soft);
             position: relative;
             overflow: hidden;
         }
 
-        .file-upload-zone:hover {
-            border-color: var(--primary);
-            background: var(--glow-color);
-            transform: scale(1.02);
+        .upload-zone:hover {
+            border-color: var(--accent);
+            border-style: solid;
+            background: var(--accent-glow);
+            transform: translateY(-2px);
         }
 
-        .file-upload-zone input[type="file"] { display: none; }
+        .upload-zone input[type="file"] { display: none; }
 
-        .file-icon-wrapper {
-            width: 70px;
-            height: 70px;
-            background: linear-gradient(135deg, var(--primary), var(--primary-light));
-            border-radius: 50%;
+        .upload-zone-icon {
+            width: 64px; height: 64px;
+            margin: 0 auto 16px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-light));
+            border-radius: 18px;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin: 0 auto 18px;
-            animation: iconPulse 2s infinite ease-in-out;
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
 
-        @keyframes iconPulse {
-            0%, 100% { box-shadow: 0 0 0 0 var(--glow-color); }
-            50% { box-shadow: 0 0 0 15px transparent; }
+        .upload-zone:hover .upload-zone-icon {
+            transform: scale(1.1) rotate(-3deg);
         }
 
-        .file-icon-wrapper i { font-size: 28px; color: #fff; }
+        .upload-zone-icon i {
+            font-size: 26px;
+            color: #fff;
+        }
 
-        .file-text {
+        .upload-zone-text {
+            font-size: 0.92rem;
             color: var(--text-secondary);
-            font-size: 0.95rem;
             transition: color 0.3s;
         }
 
-        .file-upload-zone:hover .file-text { color: var(--primary); }
-
-        .params-panel {
-            background: var(--glow-color);
-            border: 1px solid var(--border-color);
-            border-radius: 16px;
-            padding: 28px;
-            margin-top: 30px;
+        .upload-zone:hover .upload-zone-text {
+            color: var(--accent);
         }
 
-        .params-header {
-            color: var(--primary);
-            font-family: 'Orbitron', monospace;
-            font-size: 1rem;
-            margin-bottom: 22px;
-            letter-spacing: 2px;
+        /* 参数面板 — 可折叠毛玻璃面板 */
+        .panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            margin-top: 24px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .panel-header {
             display: flex;
             align-items: center;
             gap: 12px;
+            padding: 18px 24px;
             cursor: pointer;
+            user-select: none;
+            font-family: 'Cinzel', serif;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--accent);
+            letter-spacing: 1px;
+            transition: all 0.3s;
         }
 
-        .params-header:hover {
-            color: var(--primary-light);
+        .panel-header:hover { color: var(--accent-light); }
+
+        .panel-header i {
+            font-size: 0.8rem;
+            transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        .params-header i {
-            transition: transform 0.3s;
-        }
-
-        .params-header.collapsed i {
+        .panel.collapsed .panel-header i {
             transform: rotate(-90deg);
         }
 
-        .params-content {
+        .panel-body {
+            padding: 0 24px 24px;
             display: block;
+            transition: all 0.35s ease;
         }
 
-        .params-content.collapsed {
+        .panel.collapsed .panel-body {
             display: none;
         }
 
-        .custom-input {
-            background: rgba(0, 0, 0, 0.2);
-            border: 1px solid var(--border-color);
-            border-radius: 10px;
-            color: var(--text-primary);
-            padding: 14px 18px;
-            font-size: 1rem;
-            font-family: 'Rajdhani', sans-serif;
-            transition: all 0.3s;
+        /* 输入框 */
+        .input-field {
             width: 100%;
-        }
-
-        [data-theme="light"] .custom-input {
-            background: rgba(255, 255, 255, 0.9);
-        }
-
-        .custom-input:focus {
+            padding: 14px 18px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
             outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 20px var(--glow-color);
-            background: rgba(0, 0, 0, 0.3);
         }
 
-        [data-theme="light"] .custom-input:focus {
-            background: #fff;
+        .input-field:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 4px var(--accent-glow);
         }
 
-        /* Analysis Options Grid */
-        .analysis-options-grid {
+        .input-hint {
+            display: block;
+            margin-top: 6px;
+            font-size: 0.78rem;
+            color: var(--text-muted);
+        }
+
+        /* 分析选项网格 */
+        .options-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-top: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 10px;
         }
 
-        .analysis-option-item {
+        .option-item {
             display: flex;
             align-items: center;
             gap: 12px;
-            padding: 14px 18px;
-            background: rgba(0, 0, 0, 0.2);
-            border: 1px solid var(--border-color);
+            padding: 14px 16px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
             border-radius: 12px;
-            transition: all 0.3s;
             cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            user-select: none;
         }
 
-        .analysis-option-item:hover {
-            border-color: var(--primary);
-            background: rgba(255, 107, 0, 0.08);
+        .option-item:hover {
+            border-color: var(--border-hover);
+            background: var(--accent-soft);
         }
 
-        .analysis-option-item.selected {
-            background: rgba(255, 107, 0, 0.15);
-            border-color: var(--primary);
+        .option-item.active {
+            border-color: var(--accent);
+            background: var(--accent-soft);
+            box-shadow: 0 0 20px var(--accent-glow);
         }
 
-        .analysis-option-item input[type="checkbox"] {
-            display: none;
+        .option-item.disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
         }
 
-        .analysis-option-check {
-            width: 22px;
-            height: 22px;
-            border: 2px solid var(--border-color);
+        .option-item.disabled:hover {
+            border-color: var(--border);
+            background: var(--bg-primary);
+        }
+
+        .option-checkbox {
+            width: 22px; height: 22px;
+            border: 2px solid var(--border);
             border-radius: 6px;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: all 0.3s;
             flex-shrink: 0;
+            transition: all 0.3s ease;
         }
 
-        .analysis-option-item.selected .analysis-option-check {
-            background: var(--primary);
-            border-color: var(--primary);
+        .option-item.active .option-checkbox {
+            background: var(--accent);
+            border-color: var(--accent);
         }
 
-        .analysis-option-check i {
-            display: none;
+        .option-checkbox i {
+            font-size: 11px;
             color: #fff;
-            font-size: 12px;
+            display: none;
         }
 
-        .analysis-option-item.selected .analysis-option-check i {
-            display: block;
-        }
+        .option-item.active .option-checkbox i { display: block; }
 
-        .analysis-option-info {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .analysis-option-name {
+        .option-name {
             font-weight: 600;
+            font-size: 0.9rem;
             color: var(--text-primary);
-            font-size: 0.95rem;
-            margin-bottom: 2px;
         }
 
-        .analysis-option-desc {
-            font-size: 0.8rem;
-            color: var(--text-secondary);
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+        .option-desc {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            margin-top: 1px;
         }
 
-        .analysis-option-disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
+        /* 提交按钮 */
+        .submit-row {
+            text-align: center;
+            margin-top: 40px;
         }
 
-        .analysis-option-disabled:hover {
-            border-color: var(--border-color);
-            background: rgba(0, 0, 0, 0.2);
-        }
-
-        .submit-btn {
-            background: linear-gradient(135deg, var(--primary), var(--primary-light));
+        .btn-submit {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            padding: 18px 56px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-light));
             color: #fff;
             border: none;
-            border-radius: 30px;
-            padding: 16px 55px;
-            font-size: 1.15rem;
+            border-radius: 50px;
+            font-family: 'Cinzel', serif;
+            font-size: 1.05rem;
             font-weight: 700;
-            font-family: 'Orbitron', monospace;
             letter-spacing: 3px;
+            text-transform: uppercase;
             cursor: pointer;
-            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             position: relative;
             overflow: hidden;
-            margin-top: 35px;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 8px 30px var(--accent-glow);
         }
 
-        .submit-btn::before {
+        .btn-submit::before {
             content: '';
             position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
-            transition: left 0.5s;
+            top: 0; left: -100%;
+            width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent);
+            transition: left 0.6s ease;
         }
 
-        .submit-btn:hover::before { left: 100%; }
-
-        .submit-btn:hover {
-            transform: scale(1.05) translateY(-3px);
-            box-shadow: 0 15px 40px var(--glow-color);
+        .btn-submit:hover {
+            transform: translateY(-4px) scale(1.03);
+            box-shadow: 0 16px 48px var(--accent-glow), 0 0 80px var(--accent-glow);
         }
+
+        .btn-submit:hover::before { left: 100%; }
+
+        .btn-submit:active { transform: translateY(-1px) scale(0.98); }
 
         .submit-hint {
-            color: var(--text-secondary);
-            font-size: 0.85rem;
-            margin-top: 15px;
-            text-align: center;
+            margin-top: 14px;
+            font-size: 0.82rem;
+            color: var(--text-muted);
+        }
+
+        /* ============================================
+           FEATURES — 功能特性卡片区
+           ============================================ */
+        .features-section {
+            padding: 80px 24px 100px;
+            background: var(--bg-secondary);
+            transition: background 0.6s ease;
         }
 
         .features-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 25px;
-            margin-top: 70px;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+            margin-top: 56px;
         }
 
         .feature-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 18px;
-            padding: 32px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 36px 32px;
             text-align: center;
-            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transition: all 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             position: relative;
             overflow: hidden;
+            opacity: 0;
+            transform: translateY(30px);
         }
 
-        .feature-card::after {
+        .feature-card.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .feature-card::before {
             content: '';
             position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 3px;
-            background: linear-gradient(90deg, transparent, var(--primary), transparent);
-            transform: scaleX(0);
-            transition: transform 0.4s;
+            top: 0; left: 0; right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--accent), transparent);
+            opacity: 0;
+            transition: opacity 0.4s;
         }
-
-        .feature-card:hover::after { transform: scaleX(1); }
 
         .feature-card:hover {
             transform: translateY(-8px);
-            border-color: var(--primary);
-            box-shadow: 0 20px 50px var(--glow-color);
+            border-color: var(--border-hover);
+            box-shadow: 0 20px 60px var(--card-shadow);
         }
 
-        .feature-icon {
-            width: 65px;
-            height: 65px;
-            background: var(--glow-color);
-            border: 1px solid var(--border-color);
-            border-radius: 16px;
+        .feature-card:hover::before { opacity: 1; }
+
+        .feature-icon-wrap {
+            width: 68px; height: 68px;
+            margin: 0 auto 22px;
+            background: var(--accent-soft);
+            border: 1px solid var(--border);
+            border-radius: 18px;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin: 0 auto 20px;
-            transition: all 0.3s;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
 
-        .feature-card:hover .feature-icon {
-            background: linear-gradient(135deg, var(--primary), var(--primary-light));
+        .feature-card:hover .feature-icon-wrap {
+            background: linear-gradient(135deg, var(--accent), var(--accent-light));
+            border-color: transparent;
             transform: rotateY(180deg);
         }
 
-        .feature-icon i { font-size: 26px; color: var(--primary); transition: color 0.3s; }
+        .feature-icon-wrap i {
+            font-size: 26px;
+            color: var(--accent);
+            transition: color 0.3s;
+        }
 
-        .feature-card:hover .feature-icon i { color: #fff; }
+        .feature-card:hover .feature-icon-wrap i { color: #fff; }
 
-        .feature-title {
-            font-family: 'Orbitron', monospace;
+        .feature-name {
+            font-family: 'Cinzel', serif;
             font-size: 1.1rem;
+            font-weight: 700;
             color: var(--text-primary);
-            margin-bottom: 12px;
-            letter-spacing: 1px;
+            margin-bottom: 10px;
+            letter-spacing: 0.5px;
         }
 
         .feature-desc {
-            color: var(--text-secondary);
             font-size: 0.9rem;
-            line-height: 1.6;
-        }
-
-        .footer {
-            background: var(--bg-main);
-            border-top: 1px solid var(--border-color);
-            padding: 30px;
-            text-align: center;
             color: var(--text-secondary);
-            font-size: 0.85rem;
-            transition: all 0.5s ease;
+            line-height: 1.65;
         }
 
-        .footer span { color: var(--primary); }
-
-        @media (max-width: 768px) {
-            .kv-title-main { font-size: 2rem; letter-spacing: 2px; }
-            .kv-subtitle { font-size: 0.9rem; letter-spacing: 2px; }
-            .upload-card { padding: 25px; }
-            .features-grid { grid-template-columns: 1fr; }
-            .theme-toggle { width: 42px; height: 42px; top: 15px; right: 15px; }
-            .analysis-options-grid { grid-template-columns: 1fr; }
+        /* ============================================
+           FOOTER
+           ============================================ */
+        .footer {
+            padding: 32px 24px;
+            text-align: center;
+            border-top: 1px solid var(--border);
+            background: var(--bg-secondary);
+            transition: background 0.6s ease;
         }
 
+        .footer p {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            letter-spacing: 1px;
+        }
+
+        .footer strong {
+            color: var(--accent);
+            font-family: 'Cinzel', serif;
+            font-weight: 700;
+        }
+
+        /* ============================================
+           LOADING OVERLAY
+           ============================================ */
         .loading-overlay {
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.95);
+            inset: 0;
+            background: rgba(10, 10, 15, 0.92);
+            backdrop-filter: blur(12px);
             display: flex;
             align-items: center;
             justify-content: center;
-            z-index: 9999;
+            z-index: 99998;
             opacity: 0;
             visibility: hidden;
-            transition: all 0.3s;
+            transition: all 0.4s ease;
         }
 
-        [data-theme="light"] .loading-overlay { background: rgba(255, 255, 255, 0.95); }
+        [data-theme="light"] .loading-overlay {
+            background: rgba(255, 255, 255, 0.92);
+        }
 
         .loading-overlay.active { opacity: 1; visibility: visible; }
 
-        .loader { text-align: center; }
-
         .loader-ring {
-            width: 80px;
-            height: 80px;
-            border: 3px solid var(--glow-color);
-            border-top-color: var(--primary);
+            width: 64px; height: 64px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
             border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
+            animation: spin 0.9s linear infinite;
         }
 
         @keyframes spin { to { transform: rotate(360deg); } }
 
         .loader-text {
-            font-family: 'Orbitron', monospace;
-            color: var(--primary);
-            font-size: 1.1rem;
-            letter-spacing: 3px;
+            margin-top: 20px;
+            font-family: 'Cinzel', serif;
+            font-size: 0.9rem;
+            color: var(--accent);
+            letter-spacing: 4px;
+            text-transform: uppercase;
+        }
+
+        /* ============================================
+           RESPONSIVE
+           ============================================ */
+        @media (max-width: 768px) {
+            .hero-title { font-size: clamp(2.2rem, 10vw, 4rem); }
+            .upload-card { padding: 28px 20px; }
+            .features-grid { grid-template-columns: 1fr; }
+            .options-grid { grid-template-columns: 1fr; }
+            .theme-switcher { top: 16px; right: 16px; width: 48px; height: 26px; }
+            .theme-switcher::after { width: 20px; height: 20px; }
+            [data-theme="light"] .theme-switcher::after { transform: translateX(22px); }
+            .theme-label { display: none; }
+            .section-header { margin-bottom: 40px; }
+            .main-section { padding: 60px 16px 50px; }
         }
     </style>
 </head>
 <body>
-    <button class="theme-toggle" onclick="toggleTheme()" title="切换主题">
-        <i class="fas fa-moon" id="themeIcon"></i>
-    </button>
 
-    <section class="kv-section">
-        <div class="kv-bg-particles" id="particles"></div>
-        
-        <div class="wave-line"></div>
-        <div class="wave-line"></div>
-        <div class="wave-line"></div>
-        <div class="wave-line"></div>
-        
-        <div class="kv-glow-orb orange"></div>
-        <div class="kv-glow-orb orange2"></div>
-        
-        <div class="kv-content">
-            <h1 class="kv-title-main">Audio Lab</h1>
-            <p class="kv-subtitle">Time Series Analysis System (demo)</p>
-            <p class="kv-tagline">音频时间序列分析与预测平台</p>
+    <!-- Theme Switcher -->
+    <input type="checkbox" class="theme-switcher" id="themeToggle" onclick="toggleTheme()">
+    <span class="theme-label">Dark Mode</span>
+
+    <!-- ============================== HERO ============================== -->
+    <section class="hero" id="hero">
+        <div class="hero-grid"></div>
+
+        <div class="hero-waves">
+            <div class="hero-wave-line"></div>
+            <div class="hero-wave-line"></div>
+            <div class="hero-wave-line"></div>
         </div>
-        
-        <div class="scroll-indicator">
-            <i class="fas fa-chevron-down"></i>
+
+        <div class="hero-orb hero-orb--1"></div>
+        <div class="hero-orb hero-orb--2"></div>
+        <div class="hero-orb hero-orb--3"></div>
+
+        <div class="hero-content">
+            <div class="hero-badge">
+                <i class="fas fa-bolt"></i> Audio Time Series Analysis Platform
+            </div>
+            <h1 class="hero-title">
+                <span class="line line--main">AUDIO LAB</span>
+                <span class="line line--sub">音频时间序列分析与预测平台</span>
+            </h1>
+            <p class="hero-desc">
+                融合特征提取、时序分析、无监督模式发现与机器学习预测，
+                为音频信号提供全链路深度洞察。
+            </p>
+        </div>
+
+        <div class="scroll-hint" onclick="document.querySelector('.main-section').scrollIntoView({behavior:'smooth'})">
+            <div class="mouse-icon"><div class="mouse-dot"></div></div>
+            <span>Scroll</span>
         </div>
     </section>
 
+    <!-- ============================== MAIN UPLOAD ============================== -->
     <section class="main-section">
-        <div class="main-container">
-            <h2 class="section-title">分析中心</h2>
-            
+        <div class="container">
+            <div class="section-header">
+                <div class="section-tag">Analysis Center</div>
+                <h2 class="section-title">开始分析</h2>
+            </div>
+
             <div class="upload-card">
                 <form method="POST" enctype="multipart/form-data" id="analysisForm">
-                    <div style="margin-bottom: 28px;">
-                        <label class="form-label-custom">
+
+                    <!-- 主音频文件 -->
+                    <div class="form-group">
+                        <label class="form-label">
                             <i class="fas fa-music"></i> 主音频文件
                         </label>
-                        <div class="file-upload-zone" onclick="document.getElementById('audio1').click()">
-                            <div class="file-icon-wrapper">
-                                <i class="fas fa-headphones-alt"></i>
-                            </div>
-                            <p class="file-text" id="audio1-name">点击选择文件或拖拽到此处</p>
-                            <input type="file" id="audio1" name="audio1" accept=".wav,.mp3,.flac"
+                        <div class="upload-zone" onclick="document.getElementById('audio1').click()" id="zone1">
+                            <div class="upload-zone-icon"><i class="fas fa-headphones-alt"></i></div>
+                            <p class="upload-zone-text" id="audio1-name">点击选择或拖拽音频文件到此处</p>
+                            <input type="file" id="audio1" name="audio1" accept=".wav,.mp3,.flac,.ogg"
                                    onchange="updateFileName('audio1'); updateComparisonOption()">
                         </div>
                     </div>
 
-                    <div style="margin-bottom: 28px;">
-                        <label class="form-label-custom">
-                            <i class="fas fa-microphone"></i> 副音频文件（可选）
+                    <!-- 副音频文件 -->
+                    <div class="form-group">
+                        <label class="form-label">
+                            <i class="fas fa-layer-group"></i> 副音频文件（可选）
                         </label>
-                        <div class="file-upload-zone" onclick="document.getElementById('audio2').click()">
-                            <div class="file-icon-wrapper">
-                                <i class="fas fa-wave-square"></i>
-                            </div>
-                            <p class="file-text" id="audio2-name">可选，用于对比分析</p>
-                            <input type="file" id="audio2" name="audio2" accept=".wav,.mp3,.flac"
+                        <div class="upload-zone" onclick="document.getElementById('audio2').click()" id="zone2">
+                            <div class="upload-zone-icon"><i class="fas fa-wave-square"></i></div>
+                            <p class="upload-zone-text" id="audio2-name">可选，上传后启用双音频对比分析</p>
+                            <input type="file" id="audio2" name="audio2" accept=".wav,.mp3,.flac,.ogg"
                                    onchange="updateFileName('audio2'); updateComparisonOption()">
                         </div>
                     </div>
 
-                    <div class="params-panel">
-                        <h4 class="params-header" onclick="toggleParamsPanel()">
-                            <i class="fas fa-chevron-right"></i> 参数设置
-                        </h4>
-                        <div class="params-content" id="paramsContent">
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+                    <!-- 参数设置面板 -->
+                    <div class="panel" id="paramsPanel">
+                        <div class="panel-header" onclick="togglePanel('paramsPanel')">
+                            <i class="fas fa-sliders-h"></i> 参数设置
+                        </div>
+                        <div class="panel-body">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px;">
                                 <div>
-                                    <label class="form-label-custom" style="font-size: 0.9rem;">
-                                        预测步长
-                                    </label>
-                                    <input type="number" class="custom-input" id="forecast_horizon"
+                                    <label class="form-label" style="font-size: 0.88rem;">预测步长</label>
+                                    <input type="number" class="input-field" id="forecast_horizon"
                                            name="forecast_horizon" value="20" min="5" max="100">
-                                    <small style="color: var(--text-secondary); font-size: 0.8rem;">未来预测的时间步数 (5-100)</small>
+                                    <span class="input-hint">未来预测的时间步数 (5–100)</span>
                                 </div>
                                 <div>
-                                    <label class="form-label-custom" style="font-size: 0.9rem;">
-                                        Mel频带数
-                                    </label>
-                                    <input type="number" class="custom-input" id="n_mels"
+                                    <label class="form-label" style="font-size: 0.88rem;">Mel 频带数</label>
+                                    <input type="number" class="input-field" id="n_mels"
                                            name="n_mels" value="128" min="32" max="256">
-                                    <small style="color: var(--text-secondary); font-size: 0.8rem;">频谱分析的Mel滤波器数量 (32-256)</small>
+                                    <span class="input-hint">频谱分析的 Mel 滤波器数量 (32–256)</span>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <div class="params-panel">
-                        <h4 class="params-header" onclick="toggleAnalysisPanel()">
-                            <i class="fas fa-chevron-right"></i> 分析选项
-                        </h4>
-                        <div class="params-content" id="analysisContent">
-                            <div class="analysis-options-grid" id="analysisOptionsGrid">
+                    <!-- 分析选项面板 -->
+                    <div class="panel" id="analysisPanel">
+                        <div class="panel-header" onclick="togglePanel('analysisPanel')">
+                            <i class="fas fa-cogs"></i> 分析选项
+                        </div>
+                        <div class="panel-body">
+                            <div class="options-grid" id="optionsGrid">
                                 {% for opt in analysis_options %}
-                                <div 
-                                    class="analysis-option-item {% if opt.default %}selected{% endif %} {% if opt.id == 'comparison' %}analysis-option-disabled{% endif %}"
-                                    id="option_{{ opt.id }}"
-                                    onclick="toggleAnalysisOption('{{ opt.id }}')"
-                                >
-                                    <input type="checkbox" 
-                                           name="analysis_{{ opt.id }}" 
-                                           id="checkbox_{{ opt.id }}"
+                                <div class="option-item {% if opt.default %}active{% endif %} {% if opt.id == 'comparison' %}disabled{% endif %}"
+                                     id="opt_{{ opt.id }}"
+                                     onclick="toggleOption('{{ opt.id }}')">
+                                    <input type="checkbox" name="analysis_{{ opt.id }}"
+                                           id="chk_{{ opt.id }}"
                                            {% if opt.default %}checked{% endif %}
                                            {% if opt.id == 'comparison' %}disabled{% endif %}
-                                    >
-                                    <div class="analysis-option-check">
-                                        <i class="fas fa-check"></i>
-                                    </div>
-                                    <div class="analysis-option-info">
-                                        <div class="analysis-option-name">{{ opt.name }}</div>
-                                        <div class="analysis-option-desc">{{ opt.description }}</div>
+                                           style="display:none">
+                                    <div class="option-checkbox"><i class="fas fa-check"></i></div>
+                                    <div>
+                                        <div class="option-name">{{ opt.name }}</div>
+                                        <div class="option-desc">{{ opt.description }}</div>
                                     </div>
                                 </div>
                                 {% endfor %}
@@ -796,210 +1038,172 @@
                         </div>
                     </div>
 
-                    <div style="text-align: center;">
-                        <button type="submit" class="submit-btn" id="submitBtn">
+                    <!-- 提交按钮 -->
+                    <div class="submit-row">
+                        <button type="submit" class="btn-submit" id="submitBtn">
                             <i class="fas fa-rocket"></i> 开始分析
                         </button>
-                        <p class="submit-hint">分析过程可能需要1-2分钟，请耐心等待...</p>
+                        <p class="submit-hint">分析过程可能需要 1–3 分钟，请耐心等待</p>
                     </div>
                 </form>
             </div>
+        </div>
+    </section>
 
-            <h2 class="section-title" style="margin-top: 90px;">功能特性</h2>
-            
+    <!-- ============================== FEATURES ============================== -->
+    <section class="features-section">
+        <div class="container">
+            <div class="section-header">
+                <div class="section-tag">Core Capabilities</div>
+                <h2 class="section-title">核心能力</h2>
+            </div>
+
             <div class="features-grid">
                 <div class="feature-card">
-                    <div class="feature-icon">
-                        <i class="fas fa-chart-area"></i>
-                    </div>
-                    <h4 class="feature-title">特征提取</h4>
-                    <p class="feature-desc">波形 · 频谱 · 短时傅里叶变换<br>Mel频谱图 · MFCC系数</p>
+                    <div class="feature-icon-wrap"><i class="fas fa-chart-area"></i></div>
+                    <h3 class="feature-name">特征提取</h3>
+                    <p class="feature-desc">波形 · FFT 频谱 · STFT<br>Mel 频谱图 · MFCC 系数</p>
                 </div>
-
                 <div class="feature-card">
-                    <div class="feature-icon">
-                        <i class="fas fa-project-diagram"></i>
-                    </div>
-                    <h4 class="feature-title">时序分析</h4>
-                    <p class="feature-desc">自相关/偏自相关函数<br>周期性检测 · 复杂度分析</p>
+                    <div class="feature-icon-wrap"><i class="fas fa-project-diagram"></i></div>
+                    <h3 class="feature-name">时序分析</h3>
+                    <p class="feature-desc">自相关 / 偏自相关函数<br>周期性检测 · 复杂度度量</p>
                 </div>
-
                 <div class="feature-card">
-                    <div class="feature-icon">
-                        <i class="fas fa-brain"></i>
-                    </div>
-                    <h4 class="feature-title">模型预测</h4>
-                    <p class="feature-desc">ARIMA · HMM · LSTM<br>Transformer (GPU加速)</p>
+                    <div class="feature-icon-wrap"><i class="fas fa-brain"></i></div>
+                    <h3 class="feature-name">模型预测</h3>
+                    <p class="feature-desc">ARIMA · HMM · LSTM<br>Transformer (GPU 加速)</p>
                 </div>
-
                 <div class="feature-card">
-                    <div class="feature-icon">
-                        <i class="fas fa-broadcast-tower"></i>
-                    </div>
-                    <h4 class="feature-title">频带分析</h4>
-                    <p class="feature-desc">低/中/高频带分割<br>可预测性排名评估</p>
+                    <div class="feature-icon-wrap"><i class="fas fa-broadcast-tower"></i></div>
+                    <h3 class="feature-name">频带分析</h3>
+                    <p class="feature-desc">低 / 中 / 高频带分割<br>可预测性排名评估</p>
                 </div>
-
                 <div class="feature-card">
-                    <div class="feature-icon">
-                        <i class="fas fa-link"></i>
-                    </div>
-                    <h4 class="feature-title">双音频对比</h4>
-                    <p class="feature-desc">多维探索分析<br>相似度检测与匹配</p>
+                    <div class="feature-icon-wrap"><i class="fas fa-link"></i></div>
+                    <h3 class="feature-name">双音频对比</h3>
+                    <p class="feature-desc">多维探索分析<br>相似度检测与匹配发现</p>
                 </div>
-
                 <div class="feature-card">
-                    <div class="feature-icon">
-                        <i class="fas fa-image"></i>
-                    </div>
-                    <h4 class="feature-title">可视化报告</h4>
+                    <div class="feature-icon-wrap"><i class="fas fa-image"></i></div>
+                    <h3 class="feature-name">可视化报告</h3>
                     <p class="feature-desc">交互式图表展示<br>完整的分析结果报告</p>
                 </div>
             </div>
         </div>
     </section>
 
+    <!-- ============================== FOOTER ============================== -->
     <footer class="footer">
-        <p><span>AUDIO LAB</span> — 音频时间序列分析系统 | 基于 Python & Flask 构建</p>
+        <p><strong>AUDIO LAB</strong> — 音频时间序列分析系统 &nbsp;|&nbsp; Powered by Python & Flask</p>
     </footer>
 
+    <!-- Loading Overlay -->
     <div class="loading-overlay" id="loadingOverlay">
-        <div class="loader">
+        <div style="text-align:center">
             <div class="loader-ring"></div>
-            <p class="loader-text">正在分析中...</p>
+            <p class="loader-text">Analyzing...</p>
         </div>
     </div>
 
+    <!-- ============================== SCRIPTS ============================== -->
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-    
     <script>
+        // ---- Theme Toggle ----
         function toggleTheme() {
             const body = document.body;
-            const icon = document.getElementById('themeIcon');
-            const currentTheme = body.getAttribute('data-theme');
-            
-            if (currentTheme === 'light') {
+            const label = document.querySelector('.theme-label');
+            if (body.getAttribute('data-theme') === 'light') {
                 body.removeAttribute('data-theme');
-                icon.className = 'fas fa-moon';
-                localStorage.setItem('theme', 'dark');
+                label.textContent = 'Dark Mode';
+                localStorage.setItem('audiolab_theme', 'dark');
             } else {
                 body.setAttribute('data-theme', 'light');
-                icon.className = 'fas fa-sun';
-                localStorage.setItem('theme', 'light');
+                label.textContent = 'Light Mode';
+                localStorage.setItem('audiolab_theme', 'light');
             }
         }
 
-        const savedTheme = localStorage.getItem('theme');
-        if (savedTheme === 'light') {
+        // Restore saved theme
+        const saved = localStorage.getItem('audiolab_theme');
+        if (saved === 'light') {
             document.body.setAttribute('data-theme', 'light');
-            document.getElementById('themeIcon').className = 'fas fa-sun';
+            document.getElementById('themeToggle').checked = true;
+            document.querySelector('.theme-label').textContent = 'Light Mode';
         }
 
-        function createParticles() {
-            const container = document.getElementById('particles');
-            for (let i = 0; i < 50; i++) {
-                const particle = document.createElement('div');
-                particle.className = 'particle';
-                particle.style.left = Math.random() * 100 + '%';
-                particle.style.top = Math.random() * 100 + '%';
-                particle.style.animationDelay = Math.random() * 8 + 's';
-                particle.style.animationDuration = (Math.random() * 6 + 6) + 's';
-                
-                const size = Math.random() * 4 + 2;
-                particle.style.width = size + 'px';
-                particle.style.height = size + 'px';
-                
-                container.appendChild(particle);
-            }
-        }
-
-        createParticles();
-
-        function updateFileName(inputId) {
-            const input = document.getElementById(inputId);
-            const label = document.getElementById(inputId + '-name');
+        // ---- File Upload ----
+        function updateFileName(id) {
+            const input = document.getElementById(id);
+            const label = document.getElementById(id + '-name');
             if (input.files && input.files[0]) {
                 label.textContent = input.files[0].name;
-                label.style.color = getComputedStyle(document.documentElement).getPropertyValue('--primary');
+                label.style.color = getComputedStyle(document.documentElement).getPropertyValue('--accent');
                 label.style.fontWeight = '600';
             }
         }
 
         function updateComparisonOption() {
-            const audio2 = document.getElementById('audio2');
-            const hasAudio2 = audio2.files && audio2.files.length > 0;
-            const option = document.getElementById('option_comparison');
-            const checkbox = document.getElementById('checkbox_comparison');
-            
+            const hasAudio2 = document.getElementById('audio2').files && document.getElementById('audio2').files.length > 0;
+            const optEl = document.getElementById('opt_comparison');
+            const chkEl = document.getElementById('chk_comparison');
+
             if (hasAudio2) {
-                option.classList.remove('analysis-option-disabled');
-                checkbox.disabled = false;
-                checkbox.checked = true;
-                option.classList.add('selected');
+                optEl.classList.remove('disabled');
+                chkEl.disabled = false;
+                chkEl.checked = true;
+                optEl.classList.add('active');
             } else {
-                option.classList.add('analysis-option-disabled');
-                checkbox.disabled = true;
-                checkbox.checked = false;
-                option.classList.remove('selected');
+                optEl.classList.add('disabled');
+                chkEl.disabled = true;
+                chkEl.checked = false;
+                optEl.classList.remove('active');
             }
         }
 
-        function toggleAnalysisOption(optId) {
-            const option = document.getElementById('option_' + optId);
-            const checkbox = document.getElementById('checkbox_' + optId);
-            
-            if (checkbox.disabled) return;
-            
-            option.classList.toggle('selected');
-            checkbox.checked = !checkbox.checked;
+        function toggleOption(optId) {
+            const el = document.getElementById('opt_' + optId);
+            const chk = document.getElementById('chk_' + optId);
+            if (chk.disabled) return;
+            el.classList.toggle('active');
+            chk.checked = !chk.checked;
         }
 
-        function toggleParamsPanel() {
-            const header = document.querySelector('.params-panel:nth-child(3) .params-header');
-            const content = document.getElementById('paramsContent');
-            header.classList.toggle('collapsed');
-            content.classList.toggle('collapsed');
+        function togglePanel(panelId) {
+            document.getElementById(panelId).classList.toggle('collapsed');
         }
 
-        function toggleAnalysisPanel() {
-            const header = document.querySelector('.params-panel:nth-child(4) .params-header');
-            const content = document.getElementById('analysisContent');
-            header.classList.toggle('collapsed');
-            content.classList.toggle('collapsed');
-        }
-
+        // ---- Form Submit ----
         document.getElementById('analysisForm').addEventListener('submit', function(e) {
             document.getElementById('loadingOverlay').classList.add('active');
         });
 
-        document.querySelector('.scroll-indicator').addEventListener('click', function() {
-            document.querySelector('.main-section').scrollIntoView({ behavior: 'smooth' });
-        });
-
-        const observerOptions = { threshold: 0.1, rootMargin: '0px 0px -50px 0px' };
-
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
+        // ---- Scroll Reveal for Feature Cards ----
+        const revealObserver = new IntersectionObserver((entries) => {
+            entries.forEach((entry, idx) => {
                 if (entry.isIntersecting) {
-                    entry.target.style.opacity = '1';
-                    entry.target.style.transform = 'translateY(0)';
+                    setTimeout(() => {
+                        entry.target.classList.add('visible');
+                    }, idx * 100);
+                    revealObserver.unobserve(entry.target);
                 }
             });
-        }, observerOptions);
+        }, { threshold: 0.15 });
 
-        document.querySelectorAll('.feature-card').forEach((card, index) => {
-            card.style.opacity = '0';
-            card.style.transform = 'translateY(30px)';
-            card.style.transition = `all 0.6s ease ${index * 0.1}s`;
-            observer.observe(card);
+        document.querySelectorAll('.feature-card').forEach(card => {
+            card.style.transition = `all 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275)`;
+            revealObserver.observe(card);
         });
 
-        document.addEventListener('mousemove', function(e) {
-            const orbs = document.querySelectorAll('.kv-glow-orb');
-            orbs.forEach((orb, index) => {
-                const speed = index === 0 ? 0.02 : 0.01;
-                const x = (window.innerWidth / 2 - e.clientX) * speed;
-                const y = (window.innerHeight / 2 - e.clientY) * speed;
+        // ---- Mouse Parallax on Orbs ----
+        document.addEventListener('mousemove', (e) => {
+            const orbs = document.querySelectorAll('.hero-orb');
+            const cx = window.innerWidth / 2;
+            const cy = window.innerHeight / 2;
+            orbs.forEach((orb, i) => {
+                const factor = (i + 1) * 0.015;
+                const x = (cx - e.clientX) * factor;
+                const y = (cy - e.clientY) * factor;
                 orb.style.transform = `translate(${x}px, ${y}px)`;
             });
         });

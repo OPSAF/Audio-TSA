@@ -11,7 +11,7 @@ from queue import Queue
 from flask import Flask, render_template, request, redirect, url_for, Response, stream_with_context
 
 # Import our audio analysis package
-from audiots import loader, features, dynamics, discovery, unsupervised, analysis, prediction, band_analysis, visualization
+from audiots import loader, features, dynamics, volatility, model_analysis, discovery, unsupervised, analysis, prediction, band_analysis, visualization
 from audiots import similarity, similarity_viz, discovery_viz
 
 app = Flask(__name__, static_folder='static')
@@ -28,6 +28,8 @@ analysis_progress = {}
 ANALYSIS_OPTIONS = [
     {'id': 'features', 'name': '特征提取', 'description': '波形、频谱、STFT、Mel、MFCC', 'default': True},
     {'id': 'dynamics', 'name': '动态趋势分析', 'description': '能量、亮度、复杂度、节奏', 'default': True},
+    {'id': 'dynamics_analysis', 'name': '音频动态分析', 'description': 'Trend Layer + Volatility Layer (ARCH/GARCH)', 'default': True},
+    {'id': 'model_analysis', 'name': '模型结构分析', 'description': 'ARIMA/HMM/LSTM/Transformer 结构侦探', 'default': True},
     {'id': 'timeseries', 'name': '时序分析', 'description': 'ACF、PACF、周期性、复杂度', 'default': True},
     {'id': 'unsupervised', 'name': '无监督模式发现', 'description': '聚类、 motif检测', 'default': True},
     {'id': 'prediction', 'name': '机器学习预测', 'description': 'ARIMA、HMM、LSTM、Transformer', 'default': True},
@@ -95,7 +97,9 @@ def analyze_audio_with_progress(task_id, filepath1, filepath2=None, forecast_hor
     
     results = {}
     dual_audio = filepath2 is not None
-    
+    dyn1 = None
+    vol1 = None
+
     # Calculate progress steps
     total_steps = len(analysis_options) + 2  # +2 for loading and finalizing
     current_step = 0
@@ -164,6 +168,93 @@ def analyze_audio_with_progress(task_id, filepath1, filepath2=None, forecast_hor
         if dual_audio and filepath2:
             y2, _ = loader.load_audio(filepath2, target_sr=sr)
             results['_y2'] = y2
+
+        current_step += 1
+        update_progress(task_id, int(current_step / total_steps * 100))
+
+    # ============================================================
+    # Dynamics Analysis: Trend Layer + Volatility Layer
+    # ============================================================
+    if 'dynamics_analysis' in analysis_options:
+        # Ensure dynamics are extracted first (if not already done)
+        if dyn1 is None:
+            log_progress(task_id, "=" * 50, 'divider')
+            log_progress(task_id, "PHASE 1.5a: 动态趋势分析 (Trend Layer)", 'phase')
+            log_progress(task_id, "=" * 50, 'divider')
+
+            log_progress(task_id, "[Dyn] 提取动态特征 (能量、亮度、复杂度、节奏)...")
+            dyn1 = dynamics.extract_dynamics(y1, sr, window_size=0.5, hop_size=0.25)
+            results['dynamics'] = dyn1
+            results['dynamics_segments'] = dynamics.detect_structural_segments(dyn1)
+            log_progress(task_id, "[完成] Trend Layer 提取完成")
+
+        # ---- Volatility Layer ----
+        log_progress(task_id, "=" * 50, 'divider')
+        log_progress(task_id, "PHASE 1.5b: 波动率分析 (Volatility Layer)", 'phase')
+        log_progress(task_id, "=" * 50, 'divider')
+
+        log_progress(task_id, "[Vol] 计算滚动波动率...")
+        vol1 = volatility.compute_volatility_layer(dyn1, rolling_window=10, fit_garch=True)
+        results['volatility'] = vol1
+        results['volatility_summary'] = volatility.summarize_volatility(vol1)
+        vol_summ = results['volatility_summary']
+
+        log_progress(task_id, "[完成] Volatility Layer:")
+        for key in ["energy", "brightness", "complexity", "rhythm"]:
+            s = vol_summ[key]
+            log_progress(task_id,
+                f"  {key}: mean_vol={s['mean_vol']:.5f}, regime={s['volatility_regime']}, "
+                f"GARCH α+β={s.get('garch_persistence') or 0:.3f} "
+                f"(converged={s.get('garch_converged', False)})")
+
+        # ---- Trend predictions ----
+        log_progress(task_id, "[TrendPred] 对4个趋势进行预测...")
+        trend_preds = prediction.predict_all_trends(dyn1, forecast_horizon=forecast_horizon, verbose=False)
+        results['trend_predictions'] = trend_preds
+        log_progress(task_id, "[完成] 趋势预测完成")
+
+        # ---- Volatility predictions ----
+        log_progress(task_id, "[VolPred] 对波动率进行预测...")
+        vol_preds = prediction.predict_all_volatilities(vol1, forecast_horizon=min(10, forecast_horizon), verbose=False)
+        results['volatility_predictions'] = vol_preds
+        log_progress(task_id, "[完成] 波动率预测完成")
+
+        if dual_audio and filepath2:
+            if '_y2' not in results:
+                y2, _ = loader.load_audio(filepath2, target_sr=sr)
+                results['_y2'] = y2
+
+        current_step += 1
+        update_progress(task_id, int(current_step / total_steps * 100))
+
+    # ============================================================
+    # Model Ensemble Structural Analysis
+    # ============================================================
+    if 'model_analysis' in analysis_options:
+        # Ensure dynamics are extracted
+        if dyn1 is None:
+            log_progress(task_id, "[Dyn] 先提取动态特征...")
+            dyn1 = dynamics.extract_dynamics(y1, sr, window_size=0.5, hop_size=0.25)
+            results['dynamics'] = dyn1
+
+        log_progress(task_id, "=" * 50, 'divider')
+        log_progress(task_id, "PHASE 2a: 模型结构分析 (ARIMA/HMM/LSTM/Transformer)", 'phase')
+        log_progress(task_id, "=" * 50, 'divider')
+
+        log_progress(task_id, "[Model] 运行四种模型的结构侦探分析...")
+        model_report = model_analysis.analyze_model_ensemble(
+            dyn1, n_hmm_states=3, lstm_epochs=20, transformer_epochs=20, verbose=False)
+        results['model_analysis'] = model_report
+
+        # Summarize key findings
+        if model_report.arima:
+            log_progress(task_id, f"  ARIMA: {model_report.arima.summary}")
+        if model_report.hmm:
+            log_progress(task_id, f"  HMM:   {model_report.hmm.n_states} 状态, 区分度 {model_report.hmm.segmentation_quality:.0%}")
+        if model_report.lstm:
+            log_progress(task_id, f"  LSTM:  最优记忆 {model_report.lstm.optimal_lookback_seconds:.1f}s, 最可学: {model_report.lstm.most_learnable}")
+        if model_report.transformer:
+            log_progress(task_id, f"  Transformer: {model_report.transformer.n_distinct_layers} 个时间尺度")
 
         current_step += 1
         update_progress(task_id, int(current_step / total_steps * 100))
@@ -284,13 +375,37 @@ def analyze_audio_with_progress(task_id, filepath1, filepath2=None, forecast_hor
         )
         results['discovery'] = disc_report
         log_progress(task_id, f"[完成] 发现 {len(disc_report.discoveries)} 个匹配, {len(disc_report.contrasts)} 个对比")
-        
+
+        # ---- Volatility similarity (if dynamics_analysis was also run) ----
+        if 'dynamics_analysis' in analysis_options and vol1 is not None:
+            log_progress(task_id, "[Comp] 计算波动率相似度...")
+            # Ensure we have vol2
+            if dyn1 is not None:
+                dyn2_comp = dynamics.extract_dynamics(y2, sr, window_size=0.5, hop_size=0.25)
+            else:
+                dyn2_comp = dynamics.extract_dynamics(y2, sr, window_size=0.5, hop_size=0.25)
+            vol2_comp = volatility.compute_volatility_layer(dyn2_comp, rolling_window=10, fit_garch=True)
+            results['_vol2'] = vol2_comp
+
+            vol_sim_result = volatility.compute_volatility_similarity(vol1, vol2_comp)
+            results['volatility_similarity'] = vol_sim_result
+            log_progress(task_id,
+                f"[完成] 波动率相似度: {vol_sim_result['global_volatility_similarity']:.1f}% "
+                f"(主导维度: {vol_sim_result['dominant_trend']})")
+
+            # Also compute dynamics similarity
+            log_progress(task_id, "[Comp] 计算动态趋势相似度...")
+            dyn_sim = dynamics.compute_dynamics_similarity(dyn1, dyn2_comp)
+            results['dynamics_similarity'] = dyn_sim
+            log_progress(task_id,
+                f"[完成] 动态趋势相似度: {dyn_sim['global_dynamics_similarity']:.1f}%")
+
         current_step += 1
         update_progress(task_id, int(current_step / total_steps * 100))
 
     # Store analysis options used
     results['analysis_options'] = analysis_options
-    
+
     return results
 
 
@@ -433,7 +548,49 @@ def stream(task_id):
                         )
                         plot_files.append('dynamics/trends.png')
                         plot_files.append('dynamics/summary.png')
-                    
+
+                    # Generate volatility plots
+                    if results.get('volatility') and results.get('dynamics'):
+                        log_progress(task_id, "[Viz] 生成波动率分析图表...")
+                        vol_dir = os.path.join(output_dir, 'volatility')
+                        os.makedirs(vol_dir, exist_ok=True)
+                        vol = results['volatility']
+                        dyn = results['dynamics']
+
+                        visualization.plot_volatility_layer(
+                            dyn, vol,
+                            save_path=os.path.join(vol_dir, 'volatility_layer.png'),
+                        )
+                        plot_files.append('volatility/volatility_layer.png')
+
+                        # GARCH diagnostics for energy
+                        visualization.plot_garch_diagnostics(
+                            vol, trend_key='energy',
+                            save_path=os.path.join(vol_dir, 'garch_energy.png'),
+                        )
+                        plot_files.append('volatility/garch_energy.png')
+
+                        # Dynamics analysis summary dashboard
+                        dyn_analysis = {
+                            'trend_summary': dynamics.summarize_dynamics(dyn),
+                            'volatility_summary': results.get('volatility_summary', {}),
+                        }
+                        visualization.plot_dynamics_analysis_summary(
+                            dyn_analysis,
+                            save_path=os.path.join(vol_dir, 'dynamics_analysis_summary.png'),
+                        )
+                        plot_files.append('volatility/dynamics_analysis_summary.png')
+
+                        # Volatility comparison (if dual audio)
+                        vol2_viz = results.get('_vol2')
+                        if vol2_viz is not None:
+                            vol_sim = results.get('volatility_similarity')
+                            visualization.plot_volatility_comparison(
+                                vol, vol2_viz, sim_result=vol_sim,
+                                save_path=os.path.join(vol_dir, 'volatility_comparison.png'),
+                            )
+                            plot_files.append('volatility/volatility_comparison.png')
+
                     log_progress(task_id, f"[完成] 生成了 {len(plot_files)} 个图表")
 
                 # Create serializable versions
@@ -464,6 +621,32 @@ def stream(task_id):
                         'n_calm': len(seg.get('calm_indices', [])),
                     }
 
+                if results.get('volatility'):
+                    from audiots.volatility import summarize_volatility
+                    vol_summary = results.get('volatility_summary', summarize_volatility(results['volatility']))
+                    results['volatility_serializable'] = {
+                        'summary': {
+                            k: {sk: sv for sk, sv in v.items()
+                                if not isinstance(sv, np.ndarray)}
+                            for k, v in vol_summary.items()
+                        },
+                        'global_vol_similarity': (
+                            results.get('volatility_similarity', {}).get('global_volatility_similarity')
+                        ),
+                    }
+
+                if results.get('trend_predictions'):
+                    # Simplify trend predictions for JSON
+                    trend_pred_serializable = {}
+                    for trend_key, preds in results['trend_predictions'].items():
+                        trend_pred_serializable[trend_key] = {}
+                        for model_name, (forecast, metrics, true) in preds.items():
+                            trend_pred_serializable[trend_key][model_name] = {
+                                'rmse': float(metrics.get('RMSE', np.nan)) if not np.isnan(metrics.get('RMSE', np.nan)) else None,
+                                'mae': float(metrics.get('MAE', np.nan)) if not np.isnan(metrics.get('MAE', np.nan)) else None,
+                            }
+                    results['trend_predictions_serializable'] = trend_pred_serializable
+
                 if results.get('unsupervised'):
                     u = results['unsupervised']
                     results['unsupervised_serializable'] = {
@@ -491,6 +674,8 @@ def stream(task_id):
                                     'dynamics', 'dynamics_2',
                                     'dynamics_segments', 'dynamics_segments_2',
                                     'dynamics_similarity',
+                                    'volatility', 'volatility_summary',
+                                    'trend_predictions', 'volatility_predictions',
                                 )}
                 if results.get('discovery_serializable'):
                     serializable['discovery'] = results['discovery_serializable']
@@ -498,6 +683,37 @@ def stream(task_id):
                     serializable['unsupervised'] = results['unsupervised_serializable']
                 if results.get('dynamics_serializable'):
                     serializable['dynamics'] = results['dynamics_serializable']
+                if results.get('volatility_serializable'):
+                    serializable['volatility'] = results['volatility_serializable']
+                if results.get('trend_predictions_serializable'):
+                    serializable['trend_predictions'] = results['trend_predictions_serializable']
+
+                if results.get('model_analysis'):
+                    mr = results['model_analysis']
+                    serializable['model_analysis'] = {
+                        'arima_summary': mr.arima.summary if mr.arima else None,
+                        'hmm_summary': mr.hmm.summary if mr.hmm else None,
+                        'hmm_n_states': mr.hmm.n_states if mr.hmm else 0,
+                        'hmm_state_profiles': [
+                            {'id': p.state_id, 'label': p.label, 'fraction': p.fraction,
+                             'description': p.description}
+                            for p in (mr.hmm.state_profiles if mr.hmm else [])
+                        ],
+                        'lstm_summary': mr.lstm.summary if mr.lstm else None,
+                        'lstm_optimal_lookback_s': mr.lstm.optimal_lookback_seconds if mr.lstm else None,
+                        'lstm_most_learnable': mr.lstm.most_learnable if mr.lstm else None,
+                        'transformer_summary': mr.transformer.summary if mr.transformer else None,
+                        'transformer_n_layers': mr.transformer.n_distinct_layers if mr.transformer else 0,
+                        'ensemble_summary': mr.ensemble_summary,
+                    }
+                if results.get('volatility_similarity'):
+                    serializable['volatility_similarity'] = results['volatility_similarity']
+                if results.get('dynamics_similarity'):
+                    serializable['dynamics_similarity'] = {
+                        'global_dynamics_similarity': results['dynamics_similarity']['global_dynamics_similarity'],
+                        'dominant_trend': results['dynamics_similarity']['dominant_trend'],
+                        'structural_coherence': results['dynamics_similarity']['structural_coherence'],
+                    }
 
                 with open(os.path.join(output_dir, 'results.json'), 'w', encoding='utf-8') as f:
                     json.dump(serializable, f, default=str, ensure_ascii=False)

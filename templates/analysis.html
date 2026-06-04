@@ -3,433 +3,403 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>分析进度 - Audio Lab</title>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <title>分析进度 — Audio Lab</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        /* ============================================
+           CSS VARIABLES — 与 index.html 统一
+           ============================================ */
         :root {
-            --primary: #ff6b00;
-            --primary-light: #ff8c00;
-            --bg-main: #0a0a0a;
-            --bg-card: linear-gradient(145deg, #141414, #1a1a1a);
-            --text-primary: #ffffff;
-            --text-secondary: rgba(255, 255, 255, 0.6);
-            --border-color: rgba(255, 107, 0, 0.2);
-            --glow-color: rgba(255, 107, 0, 0.15);
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #121218;
+            --bg-tertiary: #1a1a24;
+            --text-primary: #f0f0f5;
+            --text-secondary: rgba(240, 240, 245, 0.55);
+            --text-muted: rgba(240, 240, 245, 0.35);
+            --accent: #FF6B00;
+            --accent-light: #ff8c33;
+            --accent-dark: #cc5500;
+            --accent-glow: rgba(255, 107, 0, 0.25);
+            --accent-soft: rgba(255, 107, 0, 0.08);
+            --border: rgba(255, 107, 0, 0.12);
+            --border-hover: rgba(255, 107, 0, 0.35);
+            --glass-bg: rgba(18, 18, 24, 0.6);
+            --glass-border: rgba(255, 255, 255, 0.06);
+            --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            --card-shadow: 0 4px 24px rgba(0, 0, 0, 0.3), 0 0 60px var(--accent-glow);
         }
 
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        [data-theme="light"] {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8f9fc;
+            --bg-tertiary: #eef0f6;
+            --text-primary: #1a1a28;
+            --text-secondary: rgba(26, 26, 40, 0.55);
+            --text-muted: rgba(26, 26, 40, 0.35);
+            --accent: #FF2A55;
+            --accent-light: #ff4d73;
+            --accent-dark: #cc2244;
+            --accent-glow: rgba(255, 42, 85, 0.15);
+            --accent-soft: rgba(255, 42, 85, 0.06);
+            --border: rgba(255, 42, 85, 0.12);
+            --border-hover: rgba(255, 42, 85, 0.35);
+            --glass-bg: rgba(255, 255, 255, 0.65);
+            --glass-border: rgba(0, 0, 0, 0.06);
+            --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+            --card-shadow: 0 4px 24px rgba(0, 0, 0, 0.06), 0 0 60px var(--accent-glow);
+        }
+
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            font-family: 'Rajdhani', 'Segoe UI', sans-serif;
-            background: var(--bg-main);
+            font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
             color: var(--text-primary);
             min-height: 100vh;
+            transition: background 0.6s cubic-bezier(0.4, 0, 0.2, 1), color 0.6s ease;
+            position: relative;
         }
 
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 40px 20px;
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+            pointer-events: none;
+            z-index: 99999;
+            opacity: var(--noise-opacity, 0.03);
         }
 
-        .header {
-            text-align: center;
-            margin-bottom: 40px;
-        }
+        [data-theme="light"] body::before { opacity: 0.02; }
 
-        .header h1 {
-            font-family: 'Orbitron', monospace;
-            font-size: 2rem;
-            color: var(--primary);
-            letter-spacing: 4px;
-            margin-bottom: 10px;
-        }
+        ::selection { background: var(--accent); color: #fff; }
 
-        .task-id {
-            color: var(--text-secondary);
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.9rem;
+        /* Theme Switcher */
+        .theme-switcher {
+            position: fixed; top: 24px; right: 24px; z-index: 100000;
+            width: 56px; height: 30px; border-radius: 20px; cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55); position: relative;
+            appearance: none; -webkit-appearance: none;
+            background: var(--bg-tertiary);
+            box-shadow: inset 0 2px 8px rgba(0,0,0,0.2), 0 0 0 2px var(--border);
         }
-
-        .progress-section {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 20px;
-            padding: 30px;
-            margin-bottom: 30px;
+        .theme-switcher::after {
+            content: ''; position: absolute; top: 3px; left: 3px;
+            width: 24px; height: 24px; border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent), var(--accent-light));
+            transition: transform 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+            box-shadow: 0 2px 10px var(--accent-glow);
         }
+        [data-theme="light"] .theme-switcher::after { transform: translateX(26px); }
+        .theme-switcher:hover { transform: scale(1.05); box-shadow: inset 0 2px 8px rgba(0,0,0,0.2), 0 0 0 2px var(--accent), 0 0 20px var(--accent-glow); }
 
-        .progress-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+        .page-wrapper { max-width: 1100px; margin: 0 auto; padding: 48px 24px 80px; }
+
+        /* Header */
+        .page-header {
+            text-align: center; margin-bottom: 48px;
+            animation: fadeInUp 0.7s ease-out both;
+        }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+
+        .page-tag {
+            display: inline-block; font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem; letter-spacing: 4px; text-transform: uppercase;
+            color: var(--accent); padding-bottom: 14px; border-bottom: 1px solid var(--border);
             margin-bottom: 20px;
         }
 
-        .progress-title {
-            font-family: 'Orbitron', monospace;
-            font-size: 1.1rem;
-            color: var(--primary);
-            letter-spacing: 2px;
+        .page-title {
+            font-family: 'Cinzel', serif; font-size: clamp(1.5rem, 4vw, 2.4rem);
+            font-weight: 700; color: var(--text-primary); letter-spacing: 1px;
+            display: flex; align-items: center; justify-content: center; gap: 16px;
         }
 
-        .progress-percentage {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 1.5rem;
-            color: var(--primary);
+        .page-title i { color: var(--accent); animation: spinSlow 3s linear infinite; }
+        @keyframes spinSlow { to { transform: rotate(360deg); } }
+
+        .task-meta {
+            display: flex; align-items: center; justify-content: center; gap: 16px;
+            flex-wrap: wrap; margin-top: 16px;
         }
 
-        .progress-bar-container {
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 10px;
-            height: 20px;
-            overflow: hidden;
+        .task-id-badge {
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 6px 16px; border-radius: 20px; background: var(--accent-soft);
+            border: 1px solid var(--border); font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78rem; color: var(--accent); letter-spacing: 1px;
+        }
+
+        .option-tags { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+        .option-tag {
+            padding: 5px 14px; border-radius: 10px; background: var(--bg-tertiary);
+            border: 1px solid var(--border); font-size: 0.78rem; color: var(--text-secondary);
+            transition: all 0.3s;
+        }
+        .option-tag:hover { border-color: var(--accent); color: var(--accent); }
+
+        /* Glass Card */
+        .glass-card {
+            background: var(--glass-bg); backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px); border: 1px solid var(--glass-border);
+            border-radius: 20px; padding: 32px; box-shadow: var(--glass-shadow);
+            margin-bottom: 28px; position: relative; overflow: hidden;
+            transition: all 0.4s ease; animation: fadeInUp 0.7s ease-out 0.15s both;
+        }
+        .glass-card:hover { border-color: var(--border-hover); box-shadow: var(--card-shadow); }
+        .glass-card::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, var(--accent), transparent); opacity: 0.4;
+        }
+
+        /* Progress Section */
+        .progress-header-row {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 22px;
+        }
+        .progress-label {
+            font-family: 'Cinzel', serif; font-size: 1rem; font-weight: 600;
+            color: var(--accent); letter-spacing: 2px; display: flex; align-items: center; gap: 10px;
+        }
+
+        .status-pill {
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 7px 18px; border-radius: 20px; font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78rem; font-weight: 500; letter-spacing: 1.5px; text-transform: uppercase;
+            transition: all 0.4s ease;
+        }
+        .status-pill.running {
+            background: var(--accent-soft); color: var(--accent); border: 1px solid var(--border);
+        }
+        .status-pill.completed {
+            background: rgba(34, 197, 94, 0.12); color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.2);
+        }
+        .status-pill.error {
+            background: rgba(239, 68, 68, 0.12); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+        .status-pill i { animation: pulseDot 1.5s infinite; }
+        .status-pill.completed i, .status-pill.error i { animation: none; }
+        @keyframes pulseDot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+        .progress-track {
+            background: var(--bg-tertiary); border-radius: 12px; height: 18px;
+            overflow: hidden; position: relative;
+        }
+        .progress-fill {
+            height: 100%; border-radius: 12px;
+            background: linear-gradient(90deg, var(--accent), var(--accent-light));
+            transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
         }
-
-        .progress-bar {
-            background: linear-gradient(90deg, var(--primary), var(--primary-light));
-            height: 100%;
-            border-radius: 10px;
-            transition: width 0.3s ease;
-            position: relative;
-        }
-
-        .progress-bar::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+        .progress-fill::after {
+            content: ''; position: absolute; inset: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent);
             animation: shimmer 2s infinite;
         }
+        @keyframes shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
 
-        @keyframes shimmer {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(100%); }
+        .progress-pct {
+            text-align: right; margin-top: 10px;
+            font-family: 'JetBrains Mono', monospace; font-size: 1.4rem;
+            font-weight: 600; color: var(--accent);
         }
 
-        .log-section {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 20px;
-            padding: 30px;
+        /* Log Section */
+        .log-label {
+            font-family: 'Cinzel', serif; font-size: 1rem; font-weight: 600;
+            color: var(--accent); letter-spacing: 2px; display: flex;
+            align-items: center; gap: 10px; margin-bottom: 18px;
         }
 
-        .log-header {
-            font-family: 'Orbitron', monospace;
-            font-size: 1.1rem;
-            color: var(--primary);
-            letter-spacing: 2px;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
+        .log-window {
+            background: var(--bg-primary); border: 1px solid var(--border);
+            border-radius: 14px; padding: 20px; max-height: 520px; overflow-y: auto;
+            font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; line-height: 1.75;
         }
+        .log-window::-webkit-scrollbar { width: 6px; }
+        .log-window::-webkit-scrollbar-track { background: transparent; }
+        .log-window::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
-        .log-container {
-            background: rgba(0, 0, 0, 0.4);
-            border-radius: 12px;
-            padding: 20px;
-            max-height: 500px;
-            overflow-y: auto;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.85rem;
-            line-height: 1.6;
+        .log-entry {
+            display: flex; gap: 14px; padding: 2px 0; animation: logSlideIn 0.3s ease-out;
         }
+        @keyframes logSlideIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
 
-        .log-line {
-            display: flex;
-            gap: 15px;
-            padding: 4px 0;
-            animation: fadeIn 0.3s ease;
-        }
+        .log-ts { color: var(--text-muted); flex-shrink: 0; user-select: none; }
+        .log-msg { color: var(--text-primary); word-break: break-all; }
 
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-5px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
+        .log-entry.phase .log-msg { color: var(--accent); font-weight: 600; }
+        .log-entry.success .log-msg { color: #22c55e; font-weight: 600; }
+        .log-entry.error .log-msg { color: #ef4444; }
+        .log-entry.warning .log-msg { color: #f59e0b; }
+        .log-entry.divider .log-msg { color: var(--text-muted); }
 
-        .log-time {
-            color: var(--text-secondary);
-            flex-shrink: 0;
+        /* Actions */
+        .actions-area {
+            text-align: center; margin-top: 36px; display: none;
+            animation: fadeInUp 0.5s ease-out both;
         }
-
-        .log-message {
-            color: var(--text-primary);
-            word-break: break-all;
-        }
-
-        .log-line.phase .log-message {
-            color: var(--primary);
-            font-weight: 600;
-        }
-
-        .log-line.success .log-message {
-            color: #22c55e;
-            font-weight: 600;
-        }
-
-        .log-line.error .log-message {
-            color: #ef4444;
-        }
-
-        .log-line.warning .log-message {
-            color: #f59e0b;
-        }
-
-        .log-line.divider .log-message {
-            color: var(--text-secondary);
-        }
-
-        .status-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 0.9rem;
-            font-weight: 600;
-        }
-
-        .status-badge.running {
-            background: rgba(255, 107, 0, 0.2);
-            color: var(--primary);
-        }
-
-        .status-badge.completed {
-            background: rgba(34, 197, 94, 0.2);
-            color: #22c55e;
-        }
-
-        .status-badge.error {
-            background: rgba(239, 68, 68, 0.2);
-            color: #ef4444;
-        }
-
-        .status-badge i {
-            animation: pulse 1.5s infinite;
-        }
-
-        .status-badge.completed i,
-        .status-badge.error i {
-            animation: none;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-
-        .actions {
-            text-align: center;
-            margin-top: 30px;
-            display: none;
-        }
-
-        .actions.visible {
-            display: block;
-        }
+        .actions-area.visible { display: block; }
 
         .btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 10px;
-            padding: 14px 35px;
-            border-radius: 30px;
-            font-family: 'Orbitron', monospace;
-            font-size: 1rem;
-            font-weight: 700;
-            letter-spacing: 2px;
-            cursor: pointer;
-            transition: all 0.3s;
-            text-decoration: none;
+            display: inline-flex; align-items: center; gap: 10px;
+            padding: 14px 36px; border-radius: 50px; font-family: 'Cinzel', serif;
+            font-size: 0.92rem; font-weight: 700; letter-spacing: 2px; cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); text-decoration: none;
         }
-
         .btn-primary {
-            background: linear-gradient(135deg, var(--primary), var(--primary-light));
-            color: #fff;
-            border: none;
+            background: linear-gradient(135deg, var(--accent), var(--accent-light)); color: #fff;
+            border: none; box-shadow: 0 8px 30px var(--accent-glow);
         }
-
-        .btn-primary:hover {
-            transform: scale(1.05);
-            box-shadow: 0 10px 30px var(--glow-color);
+        .btn-primary:hover { transform: translateY(-3px) scale(1.04); box-shadow: 0 16px 48px var(--accent-glow); }
+        .btn-outline {
+            background: transparent; color: var(--accent);
+            border: 2px solid var(--border-hover);
         }
+        .btn-outline:hover { background: var(--accent-soft); border-color: var(--accent); }
 
-        .btn-secondary {
-            background: transparent;
-            color: var(--primary);
-            border: 2px solid var(--primary);
-        }
-
-        .btn-secondary:hover {
-            background: rgba(255, 107, 0, 0.1);
-        }
-
-        .spinner {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 2px solid var(--glow-color);
-            border-top-color: var(--primary);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        .analysis-options {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin-top: 15px;
-        }
-
-        .option-tag {
-            background: rgba(255, 107, 0, 0.15);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 6px 12px;
-            font-size: 0.85rem;
-            color: var(--text-primary);
+        @media (max-width: 768px) {
+            .page-wrapper { padding: 28px 16px 60px; }
+            .page-title { font-size: 1.4rem; flex-direction: column; gap: 10px; }
+            .glass-card { padding: 22px; border-radius: 16px; }
+            .theme-switcher { top: 16px; right: 16px; width: 48px; height: 26px; }
+            .theme-switcher::after { width: 20px; height: 20px; }
+            [data-theme="light"] .theme-switcher::after { transform: translateX(22px); }
+            .option-tags { justify-content: center; }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1><i class="fas fa-cog fa-spin"></i> ANALYSIS IN PROGRESS</h1>
-            <p class="task-id">Task ID: {{ task_id }}</p>
-            <div class="analysis-options">
-                {% for opt in analysis_options %}
-                <span class="option-tag">{{ opt }}</span>
-                {% endfor %}
-            </div>
-        </div>
 
-        <div class="progress-section">
-            <div class="progress-header">
-                <span class="progress-title"><i class="fas fa-chart-line"></i> PROGRESS</span>
-                <span class="status-badge running" id="statusBadge">
-                    <i class="fas fa-circle"></i> RUNNING
-                </span>
-            </div>
-            <div class="progress-bar-container">
-                <div class="progress-bar" id="progressBar" style="width: 0%"></div>
-            </div>
-            <div style="text-align: right; margin-top: 10px;">
-                <span class="progress-percentage" id="progressText">0%</span>
-            </div>
-        </div>
+    <!-- Theme Switcher -->
+    <input type="checkbox" class="theme-switcher" id="themeToggle" onclick="toggleTheme()">
 
-        <div class="log-section">
-            <div class="log-header">
-                <i class="fas fa-terminal"></i> CONSOLE OUTPUT
-            </div>
-            <div class="log-container" id="logContainer">
-                <div class="log-line">
-                    <span class="log-time">--:--:--</span>
-                    <span class="log-message">Waiting for analysis to start...</span>
+    <div class="page-wrapper">
+        <!-- Header -->
+        <div class="page-header">
+            <div class="page-tag">Real-time Analysis Pipeline</div>
+            <h1 class="page-title">
+                <i class="fas fa-cog"></i> ANALYSIS IN PROGRESS
+            </h1>
+            <div class="task-meta">
+                <span class="task-id-badge"><i class="fas fa-fingerprint"></i> {{ task_id }}</span>
+                <div class="option-tags">
+                    {% for opt in analysis_options %}
+                    <span class="option-tag">{{ opt }}</span>
+                    {% endfor %}
                 </div>
             </div>
         </div>
 
-        <div class="actions" id="actions">
+        <!-- Progress Card -->
+        <div class="glass-card">
+            <div class="progress-header-row">
+                <span class="progress-label"><i class="fas fa-chart-line"></i> PROGRESS</span>
+                <span class="status-pill running" id="statusPill">
+                    <i class="fas fa-circle"></i> RUNNING
+                </span>
+            </div>
+            <div class="progress-track">
+                <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+            </div>
+            <div class="progress-pct" id="progressPct">0%</div>
+        </div>
+
+        <!-- Log Card -->
+        <div class="glass-card" style="animation-delay: 0.25s;">
+            <div class="log-label"><i class="fas fa-terminal"></i> CONSOLE OUTPUT</div>
+            <div class="log-window" id="logWindow">
+                <div class="log-entry">
+                    <span class="log-ts">--:--:--</span>
+                    <span class="log-msg">Waiting for analysis pipeline to initialize...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="actions-area" id="actionsArea">
             <a href="#" class="btn btn-primary" id="viewResultsBtn">
                 <i class="fas fa-chart-bar"></i> VIEW RESULTS
             </a>
-            <a href="/" class="btn btn-secondary">
+            <a href="/" class="btn btn-outline">
                 <i class="fas fa-plus"></i> NEW ANALYSIS
             </a>
         </div>
     </div>
 
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
     <script>
+        // ---- Theme Toggle (synced with index.html) ----
+        function toggleTheme() {
+            const body = document.body;
+            if (body.getAttribute('data-theme') === 'light') {
+                body.removeAttribute('data-theme');
+                localStorage.setItem('audiolab_theme', 'dark');
+            } else {
+                body.setAttribute('data-theme', 'light');
+                localStorage.setItem('audiolab_theme', 'light');
+            }
+        }
+        const saved = localStorage.getItem('audiolab_theme');
+        if (saved === 'light') {
+            document.body.setAttribute('data-theme', 'light');
+            document.getElementById('themeToggle').checked = true;
+        }
+
+        // ---- SSE Streaming ----
         const taskId = '{{ task_id }}';
-        const logContainer = document.getElementById('logContainer');
-        const progressBar = document.getElementById('progressBar');
-        const progressText = document.getElementById('progressText');
-        const statusBadge = document.getElementById('statusBadge');
-        const actions = document.getElementById('actions');
+        const logWindow = document.getElementById('logWindow');
+        const progressFill = document.getElementById('progressFill');
+        const progressPct = document.getElementById('progressPct');
+        const statusPill = document.getElementById('statusPill');
+        const actionsArea = document.getElementById('actionsArea');
         const viewResultsBtn = document.getElementById('viewResultsBtn');
 
-        // Clear initial message
-        logContainer.innerHTML = '';
+        logWindow.innerHTML = '';
 
-        // Connect to SSE endpoint
         const eventSource = new EventSource('/stream/' + taskId);
 
         eventSource.onmessage = function(event) {
             const data = JSON.parse(event.data);
-            
-            if (data.type === 'log') {
-                addLog(data.log);
-            } else if (data.type === 'progress') {
-                updateProgress(data.progress, data.status);
-            } else if (data.type === 'complete') {
-                onComplete(data.task_id);
-            } else if (data.type === 'error') {
-                addLog({ time: getCurrentTime(), message: data.message, level: 'error' });
-            }
+            if (data.type === 'log') addLog(data.log);
+            else if (data.type === 'progress') updateProgress(data.progress, data.status);
+            else if (data.type === 'complete') onComplete(data.task_id);
+            else if (data.type === 'error') addLog({ time: now(), message: data.message, level: 'error' });
         };
 
-        eventSource.onerror = function(error) {
-            console.error('SSE Error:', error);
-            addLog({ 
-                time: getCurrentTime(), 
-                message: 'Connection error. Please refresh the page.', 
-                level: 'error' 
-            });
+        eventSource.onerror = function() {
+            addLog({ time: now(), message: 'Connection lost. Please refresh the page.', level: 'error' });
         };
 
         function addLog(log) {
-            const line = document.createElement('div');
-            line.className = 'log-line ' + (log.level || 'info');
-            line.innerHTML = `
-                <span class="log-time">${log.time}</span>
-                <span class="log-message">${escapeHtml(log.message)}</span>
-            `;
-            logContainer.appendChild(line);
-            
-            // Auto scroll to bottom
-            logContainer.scrollTop = logContainer.scrollHeight;
+            const el = document.createElement('div');
+            el.className = 'log-entry ' + (log.level || 'info');
+            el.innerHTML = `<span class="log-ts">${log.time}</span><span class="log-msg">${esc(log.message)}</span>`;
+            logWindow.appendChild(el);
+            logWindow.scrollTop = logWindow.scrollHeight;
         }
 
-        function updateProgress(progress, status) {
-            progressBar.style.width = progress + '%';
-            progressText.textContent = progress + '%';
-            
+        function updateProgress(pct, status) {
+            progressFill.style.width = pct + '%';
+            progressPct.textContent = pct + '%';
             if (status === 'completed') {
-                statusBadge.className = 'status-badge completed';
-                statusBadge.innerHTML = '<i class="fas fa-check"></i> COMPLETED';
+                statusPill.className = 'status-pill completed';
+                statusPill.innerHTML = '<i class="fas fa-check"></i> COMPLETED';
             } else if (status === 'error') {
-                statusBadge.className = 'status-badge error';
-                statusBadge.innerHTML = '<i class="fas fa-times"></i> ERROR';
+                statusPill.className = 'status-pill error';
+                statusPill.innerHTML = '<i class="fas fa-times"></i> ERROR';
             }
         }
 
-        function onComplete(taskId) {
-            actions.classList.add('visible');
-            viewResultsBtn.href = '/results/' + taskId;
+        function onComplete(tid) {
+            actionsArea.classList.add('visible');
+            viewResultsBtn.href = '/results/' + tid;
             eventSource.close();
         }
 
-        function getCurrentTime() {
-            const now = new Date();
-            return now.toTimeString().split(' ')[0];
-        }
-
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
+        function now() { return new Date().toTimeString().split(' ')[0]; }
+        function esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
     </script>
 </body>
 </html>

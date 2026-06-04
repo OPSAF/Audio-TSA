@@ -1,5 +1,6 @@
 """Prediction models module."""
 
+from typing import Dict, List, Optional, Tuple, Union
 import numpy as np
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error
@@ -473,3 +474,253 @@ def run_all_predictions(mel_spec, forecast_horizon=20, verbose=True):
     results['Transformer'] = (tf_forecast, tf_metrics, true_values)
 
     return results
+
+
+# ---------------------------------------------------------------------------
+# Trend & Volatility prediction (consumes dynamics / volatility output)
+# ---------------------------------------------------------------------------
+
+def predict_trend_series(
+    series: np.ndarray,
+    forecast_horizon: int = 20,
+    models: str = "all",
+    epochs: int = 30,
+    verbose: bool = False,
+) -> Dict:
+    """
+    Run prediction models on a single trend time series.
+
+    This is the bridge between the Trend/Volatility Layer and the
+    prediction engines.  Rather than operating on mel-spectrogram means,
+    it accepts ANY 1-D time series (energy trend, brightness trend,
+    volatility series, etc.).
+
+    Parameters
+    ----------
+    series : ndarray       1-D time series to forecast.
+    forecast_horizon : int Forecast steps.
+    models : str           "all", "arima", "hmm", "lstm", "transformer",
+                            or a list of model names.
+    epochs : int           Epochs for deep models.
+    verbose : bool         Print progress.
+
+    Returns
+    -------
+    results : dict         Same structure as ``run_all_predictions()``:
+                            {model_name: (forecast, metrics, true_values)}
+    """
+    series = np.asarray(series, dtype=np.float64).ravel()
+
+    if models == "all":
+        model_list = ["ARIMA", "HMM", "LSTM", "Transformer"]
+    elif isinstance(models, str):
+        model_list = [m.strip() for m in models.split(",")]
+    else:
+        model_list = list(models)
+
+    # Map to canonical case
+    model_list = [m.upper() if m.lower() != "transformer" else "Transformer"
+                  for m in model_list]
+    model_list = [m.capitalize() if m.lower() not in ("arima", "hmm", "lstm", "transformer")
+                  else ("ARIMA" if m.upper() == "ARIMA" else
+                         "HMM" if m.upper() == "HMM" else m)
+                  for m in model_list]
+    # Simplify:
+    canonical = []
+    for m in model_list:
+        ml = m.lower()
+        if ml in ("arima",): canonical.append("ARIMA")
+        elif ml in ("hmm",): canonical.append("HMM")
+        elif ml in ("lstm",): canonical.append("LSTM")
+        elif ml in ("transformer",): canonical.append("Transformer")
+        else: canonical.append(m)
+    model_list = canonical
+
+    train_size = int(len(series) * 0.8)
+    train_segment = series[:train_size]
+    true_values = series[train_size: train_size + forecast_horizon]
+
+    # Pad true_values if series is too short
+    if len(true_values) < forecast_horizon:
+        true_values = np.pad(true_values, (0, forecast_horizon - len(true_values)),
+                             mode="edge")
+
+    results = {}
+
+    for model_name in model_list:
+        try:
+            if model_name == "ARIMA":
+                if verbose:
+                    print(f"  [Trend Pred] ARIMA on series (len={len(train_segment)})...")
+                forecast, metrics = predict_arima(train_segment, forecast_horizon)
+                results["ARIMA"] = (forecast, metrics, true_values)
+
+            elif model_name == "HMM":
+                if verbose:
+                    print("  [Trend Pred] HMM...")
+                forecast, metrics = predict_hmm(train_segment, forecast_horizon)
+                results["HMM"] = (forecast, metrics, true_values)
+
+            elif model_name == "LSTM":
+                if verbose:
+                    print("  [Trend Pred] LSTM...")
+                lstm = LSTMPredictor(lookback=min(30, max(5, len(train_segment) // 4)))
+                forecast, metrics = lstm.predict(train_segment, forecast_horizon, epochs=epochs)
+                results["LSTM"] = (forecast, metrics, true_values)
+
+            elif model_name == "Transformer":
+                if verbose:
+                    print("  [Trend Pred] Transformer...")
+                transformer = TransformerPredictor(
+                    lookback=min(30, max(5, len(train_segment) // 4)))
+                forecast, metrics = transformer.predict(
+                    train_segment, forecast_horizon, epochs=epochs)
+                results["Transformer"] = (forecast, metrics, true_values)
+
+        except Exception as e:
+            if verbose:
+                print(f"  [Trend Pred] {model_name} failed: {e}")
+            results[model_name] = (
+                np.zeros(forecast_horizon),
+                {"RMSE": np.nan, "MAE": np.nan, "MSE": np.nan, "error": str(e)},
+                true_values,
+            )
+
+    return results
+
+
+def predict_all_trends(
+    dynamics: Dict,
+    forecast_horizon: int = 20,
+    models: str = "all",
+    epochs: int = 30,
+    verbose: bool = True,
+) -> Dict:
+    """
+    Run prediction models on all four trend time series.
+
+    Parameters
+    ----------
+    dynamics : dict          Output of ``dynamics.extract_dynamics()``.
+    forecast_horizon : int   Forecast steps.
+    models : str             Model selection (see ``predict_trend_series()``).
+    epochs : int             Epochs for deep models.
+    verbose : bool           Print progress.
+
+    Returns
+    -------
+    trend_predictions : dict
+        Keys: ``energy``, ``brightness``, ``complexity``, ``rhythm``.
+        Each value is the standard prediction dict:
+        {model_name: (forecast, metrics, true_values)}
+    """
+    trend_keys = ["energy", "brightness", "complexity", "rhythm"]
+    trend_names_cn = ["能量", "亮度", "复杂度", "节奏"]
+
+    all_results = {}
+
+    for key, name_cn in zip(trend_keys, trend_names_cn):
+        series = np.asarray(dynamics[key], dtype=np.float64).ravel()
+
+        if verbose:
+            print(f"  [TrendPred] Predicting {name_cn} trend ({len(series)} points) ...")
+
+        all_results[key] = predict_trend_series(
+            series,
+            forecast_horizon=forecast_horizon,
+            models=models,
+            epochs=epochs,
+            verbose=verbose,
+        )
+
+    return all_results
+
+
+def predict_volatility(
+    vol_layer: Dict,
+    forecast_horizon: int = 10,
+    trend_key: str = "energy",
+    models: str = "all",
+    epochs: int = 20,
+    verbose: bool = False,
+) -> Dict:
+    """
+    Run prediction on a volatility series.
+
+    Volatility is slower-changing than raw trends, so a shorter
+    forecast horizon is recommended.
+
+    Parameters
+    ----------
+    vol_layer : dict         Output of ``volatility.compute_volatility_layer()``.
+    forecast_horizon : int   Forecast steps (keep modest — 5–15).
+    trend_key : str          Which volatility dimension to forecast.
+    models : str             Model selection.
+    epochs : int             Epochs for deep models.
+    verbose : bool           Print progress.
+
+    Returns
+    -------
+    results : dict           Same structure as ``predict_trend_series()``.
+    """
+    vol_series = vol_layer.get(f"{trend_key}_vol")
+    if vol_series is None:
+        raise ValueError(
+            f"Volatility key '{trend_key}_vol' not found in vol_layer. "
+            f"Available keys: {[k for k in vol_layer if '_vol' in k]}"
+        )
+
+    if verbose:
+        print(f"  [VolPred] Predicting {trend_key} volatility "
+              f"({len(vol_series)} points) ...")
+
+    return predict_trend_series(
+        vol_series,
+        forecast_horizon=forecast_horizon,
+        models=models,
+        epochs=epochs,
+        verbose=verbose,
+    )
+
+
+def predict_all_volatilities(
+    vol_layer: Dict,
+    forecast_horizon: int = 10,
+    models: str = "all",
+    epochs: int = 20,
+    verbose: bool = True,
+) -> Dict:
+    """
+    Run prediction on all four volatility series.
+
+    Parameters
+    ----------
+    vol_layer : dict         Output of ``volatility.compute_volatility_layer()``.
+    forecast_horizon : int   Forecast steps.
+    models : str             Model selection.
+    epochs : int             Epochs for deep models.
+    verbose : bool           Print progress.
+
+    Returns
+    -------
+    vol_predictions : dict
+        Keys: ``energy``, ``brightness``, ``complexity``, ``rhythm``.
+    """
+    trend_keys = ["energy", "brightness", "complexity", "rhythm"]
+    trend_names_cn = ["能量", "亮度", "复杂度", "节奏"]
+
+    all_results = {}
+
+    for key, name_cn in zip(trend_keys, trend_names_cn):
+        if verbose:
+            print(f"  [VolPred] Predicting {name_cn} volatility ...")
+        all_results[key] = predict_volatility(
+            vol_layer,
+            forecast_horizon=forecast_horizon,
+            trend_key=key,
+            models=models,
+            epochs=epochs,
+            verbose=False,
+        )
+
+    return all_results

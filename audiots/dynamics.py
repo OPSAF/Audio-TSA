@@ -595,3 +595,132 @@ def print_dynamics_similarity_report(sim_result: Dict):
     print(f"  Structural coherence: {sim_result['structural_coherence']:.3f}")
     print("-" * 70)
     print()
+
+
+# ---------------------------------------------------------------------------
+# 7. Trend Layer formalisation (lightweight wrapper)
+# ---------------------------------------------------------------------------
+
+from dataclasses import dataclass, field as dc_field
+from typing import Any as _Any
+
+
+@dataclass
+class TrendLayer:
+    """
+    Formalised Trend Layer — the four core audio dynamic trends.
+
+    This is a typed wrapper around the dict returned by
+    ``extract_dynamics()``.  It exists for documentation and for
+    type-safe consumption by downstream modules (Volatility Layer,
+    Prediction, Similarity).
+    """
+    times: np.ndarray                              # centre time of each window (s)
+    energy: np.ndarray                             # RMS energy per window
+    brightness: np.ndarray                         # spectral centroid per window
+    complexity: np.ndarray                         # spectral entropy per window
+    rhythm: np.ndarray                             # onset density per window
+    energy_norm: np.ndarray                        # z-score normalised
+    brightness_norm: np.ndarray
+    complexity_norm: np.ndarray
+    rhythm_norm: np.ndarray
+    params: dict = dc_field(default_factory=dict)  # window_size, hop_size, sr, n_windows
+
+    @classmethod
+    def from_dynamics(cls, dynamics: Dict) -> "TrendLayer":
+        """Construct from the dict returned by ``extract_dynamics()``."""
+        return cls(
+            times=dynamics["times"],
+            energy=dynamics["energy"],
+            brightness=dynamics["brightness"],
+            complexity=dynamics["complexity"],
+            rhythm=dynamics["rhythm"],
+            energy_norm=dynamics.get("energy_norm", dynamics["energy"]),
+            brightness_norm=dynamics.get("brightness_norm", dynamics["brightness"]),
+            complexity_norm=dynamics.get("complexity_norm", dynamics["complexity"]),
+            rhythm_norm=dynamics.get("rhythm_norm", dynamics["rhythm"]),
+            params=dynamics.get("params", {}),
+        )
+
+    def to_dict(self) -> Dict:
+        """Convert back to the canonical dict format."""
+        return {
+            "times": self.times,
+            "energy": self.energy,
+            "brightness": self.brightness,
+            "complexity": self.complexity,
+            "rhythm": self.rhythm,
+            "energy_norm": self.energy_norm,
+            "brightness_norm": self.brightness_norm,
+            "complexity_norm": self.complexity_norm,
+            "rhythm_norm": self.rhythm_norm,
+            "params": self.params,
+        }
+
+    @property
+    def n_windows(self) -> int:
+        return self.params.get("n_windows", len(self.times))
+
+    @property
+    def window_size(self) -> float:
+        return self.params.get("window_size", 0.5)
+
+    @property
+    def hop_size(self) -> float:
+        return self.params.get("hop_size", 0.25)
+
+
+def analyze_trend_layer(
+    dynamics: Dict,
+    detect_segments: bool = True,
+    climax_percentile: float = 85.0,
+    calm_percentile: float = 25.0,
+) -> Dict:
+    """
+    Run the full Trend Layer analysis on a dynamics dict.
+
+    This is the formal entry point for the Trend Layer.  It wraps
+    ``extract_dynamics()`` (if a raw waveform is given), runs
+    ``detect_structural_segments()`` and ``summarize_dynamics()``,
+    and returns a consolidated result.
+
+    Parameters
+    ----------
+    dynamics : dict          Output of ``extract_dynamics()`` (or raw waveform will
+                              be processed if ``_y`` key present).
+    detect_segments : bool   Whether to run structural segment detection.
+    climax_percentile : float
+    calm_percentile : float
+
+    Returns
+    -------
+    trend_analysis : dict
+        Keys: ``trend_layer`` (TrendLayer), ``segments``, ``summary``,
+        ``n_climax``, ``n_calm``, ``n_buildup``, ``n_transition``.
+    """
+    summary = summarize_dynamics(dynamics)
+
+    result: Dict[str, _Any] = {
+        "trend_layer": TrendLayer.from_dynamics(dynamics),
+        "summary": summary,
+    }
+
+    if detect_segments:
+        segments = detect_structural_segments(
+            dynamics,
+            climax_percentile=climax_percentile,
+            calm_percentile=calm_percentile,
+        )
+        result["segments"] = segments
+        result["n_climax"] = len(segments.get("climax_indices", []))
+        result["n_calm"] = len(segments.get("calm_indices", []))
+        result["n_buildup"] = len(segments.get("buildup_indices", []))
+        result["n_transition"] = len(segments.get("transition_indices", []))
+    else:
+        result["segments"] = None
+        result["n_climax"] = 0
+        result["n_calm"] = 0
+        result["n_buildup"] = 0
+        result["n_transition"] = 0
+
+    return result
