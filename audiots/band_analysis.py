@@ -77,9 +77,9 @@ def analyze_band_predictability(mel_spec, forecast_horizon=20, parallel=True, ep
     third = n_mels // 3
 
     bands = {
-        'low': {'data': mel_spec[:third, :], 'name': '低频带', 'range': f'0-{third}'},
-        'mid': {'data': mel_spec[third:2 * third, :], 'name': '中频带', 'range': f'{third}-{2 * third}'},
-        'high': {'data': mel_spec[2 * third:, :], 'name': '高频带', 'range': f'{2 * third}-{n_mels}'}
+        'low': {'data': mel_spec[:third, :], 'name': 'Low Band', 'range': f'0-{third}'},
+        'mid': {'data': mel_spec[third:2 * third, :], 'name': 'Mid Band', 'range': f'{third}-{2 * third}'},
+        'high': {'data': mel_spec[2 * third:, :], 'name': 'High Band', 'range': f'{2 * third}-{n_mels}'}
     }
 
     if parallel and len(bands) > 1:

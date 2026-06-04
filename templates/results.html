@@ -305,7 +305,7 @@
             </div>
             <div class="stat-card">
                 <div class="stat-icon"><i class="fas fa-clock"></i></div>
-                <div class="stat-val">{{ results['audio_info']['duration']|round(2) }}s</div>
+                <div class="stat-val">{{ results['audio_info']['duration']|float|round(2) }}s</div>
                 <div class="stat-label">Duration</div>
             </div>
             <div class="stat-card">
@@ -326,11 +326,11 @@
             <div class="data-grid">
                 <div class="data-cell">
                     <div class="data-key">Dominant Frequency</div>
-                    <div class="data-val">{{ results['periodicity']['dominant_frequency']|round(2) }} Hz</div>
+                    <div class="data-val">{{ results['periodicity']['dominant_frequency']|float|round(2) }} Hz</div>
                 </div>
                 <div class="data-cell">
                     <div class="data-key">Dominant Period</div>
-                    <div class="data-val">{{ results['periodicity']['dominant_period_seconds']|round(4) }} s</div>
+                    <div class="data-val">{{ results['periodicity']['dominant_period_seconds']|float|round(4) }} s</div>
                 </div>
                 <div class="data-cell">
                     <div class="data-key">ACF Peaks Count</div>
@@ -338,15 +338,15 @@
                 </div>
                 <div class="data-cell">
                     <div class="data-key">Zero-Crossing Rate</div>
-                    <div class="data-val">{{ results['complexity']['zero_crossing_rate']|round(4) }}</div>
+                    <div class="data-val">{{ results['complexity']['zero_crossing_rate']|float|round(4) }}</div>
                 </div>
                 <div class="data-cell">
                     <div class="data-key">Sample Entropy</div>
-                    <div class="data-val">{{ results['complexity']['sample_entropy']|round(4) }}</div>
+                    <div class="data-val">{{ results['complexity']['sample_entropy']|float|round(4) }}</div>
                 </div>
                 <div class="data-cell">
                     <div class="data-key">Spectral Flatness</div>
-                    <div class="data-val">{{ results['spectral_flatness']|round(4) }}</div>
+                    <div class="data-val">{{ results['spectral_flatness']|float|round(4) }}</div>
                 </div>
             </div>
         </div>
@@ -407,12 +407,11 @@
                 <thead><tr><th>MODEL</th><th>RMSE</th><th>MAE</th><th>MSE</th></tr></thead>
                 <tbody>
                     {% for model, prediction_data in results['predictions'].items() %}
-                    {% set forecast, metrics, true = prediction_data %}
                     <tr>
                         <td><span class="model-name">{{ model }}</span></td>
-                        <td><span class="metric-num">{{ metrics.get('RMSE', 'N/A')|round(4) if not metrics.get('RMSE') != metrics.get('RMSE') else 'N/A' }}</span></td>
-                        <td><span class="metric-num">{{ metrics.get('MAE', 'N/A')|round(4) if not metrics.get('MAE') != metrics.get('MAE') else 'N/A' }}</span></td>
-                        <td><span class="metric-num">{{ metrics.get('MSE', 'N/A')|round(4) if not metrics.get('MSE') != metrics.get('MSE') else 'N/A' }}</span></td>
+                        <td><span class="metric-num">{{ prediction_data[1].get('RMSE', 'N/A')|round(4) if not prediction_data[1].get('RMSE') != prediction_data[1].get('RMSE') else 'N/A' }}</span></td>
+                        <td><span class="metric-num">{{ prediction_data[1].get('MAE', 'N/A')|round(4) if not prediction_data[1].get('MAE') != prediction_data[1].get('MAE') else 'N/A' }}</span></td>
+                        <td><span class="metric-num">{{ prediction_data[1].get('MSE', 'N/A')|round(4) if not prediction_data[1].get('MSE') != prediction_data[1].get('MSE') else 'N/A' }}</span></td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -435,10 +434,10 @@
                 <div class="band-card">
                     <div class="band-head">
                         <span class="band-name">{{ data['name'] }}</span>
-                        <span class="band-badge">RMSE: {{ data['avg_rmse']|round(4) }}</span>
+                        <span class="band-badge">RMSE: {{ data['avg_rmse']|float|round(4) }}</span>
                     </div>
                     <div class="band-row"><span class="band-k">Best Model:</span><span class="band-v">{{ data['best_model'] or 'N/A' }}</span></div>
-                    <div class="band-row"><span class="band-k">Average MAE:</span><span class="band-v">{{ data['avg_mae']|round(4) }}</span></div>
+                    <div class="band-row"><span class="band-k">Average MAE:</span><span class="band-v">{{ data['avg_mae']|float|round(4) }}</span></div>
                 </div>
                 {% endfor %}
             </div>
@@ -455,7 +454,7 @@
                         <div class="rank-band-name">{{ item['band'] }}</div>
                         <div class="rank-detail">Best Model: {{ item['best_model'] }}</div>
                     </div>
-                    <span class="rank-rmse">{{ item['avg_rmse']|round(4) }}</span>
+                    <span class="rank-rmse">{{ item['avg_rmse']|float|round(4) }}</span>
                 </li>
                 {% endfor %}
             </ol>
