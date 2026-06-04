@@ -5,6 +5,23 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
+# Set font to ensure no encoding issues - try multiple fonts
+import matplotlib.font_manager as fm
+# Try to find available fonts
+available_fonts = [f.name for f in fm.fontManager.ttflist]
+# Preferred fonts in order of preference
+font_candidates = ['DejaVu Sans', 'Arial', 'Helvetica', 'Tahoma', 'Verdana', 'Calibri', 'Segoe UI', 'Microsoft YaHei', 'SimHei']
+selected_font = 'DejaVu Sans'
+for font in font_candidates:
+    if font in available_fonts:
+        selected_font = font
+        break
+plt.rcParams['font.family'] = selected_font
+plt.rcParams['axes.unicode_minus'] = False
+# Additional settings to prevent encoding issues
+plt.rcParams['font.size'] = 10
+plt.rcParams['figure.dpi'] = 100
+
 
 def plot_waveform(t, y, save_path=None, title='Audio Waveform'):
     """Plot audio waveform."""
@@ -344,21 +361,28 @@ def plot_error_bar(results, save_path=None):
     width = 0.35
 
     fig = plt.figure(figsize=(10, 6))
-    rects1 = plt.bar(x - width/2, rmse_values, width, label='RMSE')
-    rects2 = plt.bar(x + width/2, mae_values, width, label='MAE')
+    
+    # Handle NaN values
+    rmse_for_plot = [r if not np.isnan(r) else 0 for r in rmse_values]
+    mae_for_plot = [m if not np.isnan(m) else 0 for m in mae_values]
+    
+    rects1 = plt.bar(x - width/2, rmse_for_plot, width, label='RMSE')
+    rects2 = plt.bar(x + width/2, mae_for_plot, width, label='MAE')
 
     plt.title('Model Error Comparison', fontsize=14)
     plt.xticks(x, models)
     plt.legend()
 
-    for rect in rects1:
+    for i, rect in enumerate(rects1):
         height = rect.get_height()
+        text = 'N/A' if np.isnan(rmse_values[i]) else f'{rmse_values[i]:.3f}'
         plt.text(rect.get_x() + rect.get_width()/2., height,
-                 f'{height:.3f}', ha='center', va='bottom')
-    for rect in rects2:
+                 text, ha='center', va='bottom')
+    for i, rect in enumerate(rects2):
         height = rect.get_height()
+        text = 'N/A' if np.isnan(mae_values[i]) else f'{mae_values[i]:.3f}'
         plt.text(rect.get_x() + rect.get_width()/2., height,
-                 f'{height:.3f}', ha='center', va='bottom')
+                 text, ha='center', va='bottom')
 
     plt.tight_layout()
     if save_path:
@@ -375,15 +399,22 @@ def plot_band_errors(band_summary, save_path=None):
     avg_rmse = [band_summary[b]['avg_rmse'] for b in bands]
 
     fig = plt.figure(figsize=(10, 6))
-    bars = plt.bar(band_names, avg_rmse, color=['#1f77b4', '#ff7f0e', '#2ca02c'])
+    
+    # Handle NaN values - replace with 0 for plotting but mark them
+    rmse_for_plot = [r if not np.isnan(r) else 0 for r in avg_rmse]
+    bars = plt.bar(band_names, rmse_for_plot, color=['#1f77b4', '#ff7f0e', '#2ca02c'])
 
     plt.title('Band-wise Error Comparison', fontsize=14)
     plt.ylabel('RMSE', fontsize=12)
 
-    for bar in bars:
+    for i, bar in enumerate(bars):
         height = bar.get_height()
+        if np.isnan(avg_rmse[i]):
+            text = 'N/A'
+        else:
+            text = f'{avg_rmse[i]:.3f}'
         plt.text(bar.get_x() + bar.get_width()/2., height,
-                 f'{height:.3f}', ha='center', va='bottom')
+                 text, ha='center', va='bottom')
 
     plt.tight_layout()
     if save_path:
@@ -427,9 +458,18 @@ def generate_report_plots(analysis_results, output_dir='outputs'):
                       analysis_results['acf_pacf']['ci'],
                       os.path.join(output_dir, 'acf_pacf.png'))
 
+    # Generate periodicity plot if data is available
+    if 'periodicity' in analysis_results and '_y1' in analysis_results and '_sr' in analysis_results:
+        plot_periodicity(
+            analysis_results['_y1'],
+            analysis_results['_sr'],
+            period_info=analysis_results['periodicity'],
+            save_path=os.path.join(output_dir, 'periodicity.png')
+        )
+
     if 'predictions' in analysis_results:
         plot_prediction_comparison(analysis_results['predictions'],
-                                   os.path.join(output_dir, 'prediction_comparison.png'))
+                                   save_path=os.path.join(output_dir, 'prediction_comparison.png'))
         plot_error_bar(analysis_results['predictions'],
                        os.path.join(output_dir, 'error_comparison.png'))
 
@@ -449,7 +489,7 @@ def plot_dynamics_trends(
     dynamics,
     segments=None,
     save_path=None,
-    title="Audio Dynamics — Trend Analysis",
+    title="Audio Dynamics - Trend Analysis",
 ):
     """
     4-panel plot of energy, brightness, complexity, and rhythm trends.
@@ -526,7 +566,7 @@ def plot_dynamics_dual(
     dyn2,
     sim_result=None,
     save_path=None,
-    title="Dual Audio — Dynamics Comparison",
+    title="Dual Audio - Dynamics Comparison",
 ):
     """
     4-panel overlay plot comparing dynamics of two audio files.
@@ -706,7 +746,7 @@ def plot_volatility_layer(
     dynamics: dict,
     vol_layer: dict,
     save_path: str = None,
-    title: str = "Volatility Layer — Rolling Volatility on Audio Dynamics",
+    title: str = "Volatility Layer - Rolling Volatility on Audio Dynamics",
 ) -> "plt.Figure":
     """
     4-panel plot: each trend overlaid with its rolling volatility band.
@@ -802,10 +842,10 @@ def plot_garch_diagnostics(
 
     if title is None:
         title = (
-            f"GARCH Diagnostics — {trend_key} trend "
-            f"(α+β={persistence:.3f}, backend={backend})"
+            f"GARCH Diagnostics - {trend_key} trend "
+            f"(alpha+beta={persistence:.3f}, backend={backend})"
             if persistence is not None
-            else f"GARCH Diagnostics — {trend_key} trend"
+            else f"GARCH Diagnostics - {trend_key} trend"
         )
 
     times = vol_layer["times"]
@@ -849,23 +889,23 @@ def plot_garch_diagnostics(
     ax = axes[2]
     ax.axis("off")
     param_text = (
-        f"GARCH Model:  ω = {garch.get('omega', np.nan):.6f}\n"
-        f"              α = {garch.get('alpha', np.nan):.4f}  "
-        f"(ARCH term — reaction to shocks)\n"
-        f"              β = {garch.get('beta', np.nan):.4f}  "
-        f"(GARCH term — volatility persistence)\n"
-        f"              α+β = {garch.get('persistence', np.nan):.4f}  "
-        f"(persistence — closeness to 1 = long memory)\n"
+        f"GARCH Model:  omega = {garch.get('omega', np.nan):.6f}\n"
+        f"              alpha = {garch.get('alpha', np.nan):.4f}  "
+        f"(ARCH term - reaction to shocks)\n"
+        f"              beta = {garch.get('beta', np.nan):.4f}  "
+        f"(GARCH term - volatility persistence)\n"
+        f"              alpha+beta = {garch.get('persistence', np.nan):.4f}  "
+        f"(persistence - closeness to 1 = long memory)\n"
         f"              Half-life = "
         f"{garch.get('half_life', np.inf):.1f} steps\n"
         f"              Backend: {backend}  |  Converged: {converged}\n"
         f"              Interpretation: "
         + (
-            "High volatility persistence — shocks decay slowly"
+            "High volatility persistence - shocks decay slowly"
             if persistence and persistence > 0.9
-            else "Moderate persistence — volatility mean-reverts steadily"
+            else "Moderate persistence - volatility mean-reverts steadily"
             if persistence and persistence > 0.5
-            else "Low persistence — volatility shocks are short-lived"
+            else "Low persistence - volatility shocks are short-lived"
             if persistence is not None
             else "Insufficient data for reliable GARCH fit"
         )
@@ -887,7 +927,7 @@ def plot_volatility_comparison(
     vol2: dict,
     sim_result: dict = None,
     save_path: str = None,
-    title: str = "Dual Audio — Volatility Comparison",
+    title: str = "Dual Audio - Volatility Comparison",
 ) -> "plt.Figure":
     """
     4-panel overlay comparing volatility profiles of two audio files.
@@ -945,7 +985,7 @@ def plot_volatility_comparison(
 def plot_dynamics_analysis_summary(
     dyn_analysis: dict,
     save_path: str = None,
-    title: str = "Audio Dynamics Analysis — Trend + Volatility Summary",
+    title: str = "Audio Dynamics Analysis - Trend + Volatility Summary",
 ) -> "plt.Figure":
     """
     Combined dashboard: trend stats table + volatility stats table + GARCH params.
@@ -1037,7 +1077,7 @@ def plot_dynamics_analysis_summary(
             ])
         else:
             cell_text_g.append([
-                key.capitalize(), "—", "—", "—", "no fit",
+                key.capitalize(), "-", "-", "-", "no fit",
             ])
     tbl3 = ax_garch.table(
         cellText=cell_text_g, colLabels=col_labels_g, loc="upper center",

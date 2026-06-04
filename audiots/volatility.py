@@ -114,7 +114,7 @@ def _fit_garch_statsmodels(returns: np.ndarray, p: int = 1, q: int = 1) -> Dict:
 
 
 def _fit_garch_manual(returns: np.ndarray, p: int = 1, q: int = 1,
-                      max_iter: int = 500) -> Dict:
+                      max_iter: int = 1000) -> Dict:
     """
     Pure scipy GARCH(p,q) MLE fallback.
 
@@ -149,61 +149,59 @@ def _fit_garch_manual(returns: np.ndarray, p: int = 1, q: int = 1,
 
         return float(0.5 * np.sum(np.log(sigma2) + r2 / sigma2))
 
-    # Smart initial guess
+    # Smart initial guesses - try multiple starting points
     var_r = float(np.var(returns))
-    omega0 = var_r * 0.05
-    alpha0 = 0.10
-    beta0 = min(0.80, 0.999 - alpha0 - 0.01)
+    initial_guesses = [
+        # Standard starting point
+        (var_r * 0.05, 0.10, min(0.80, 0.999 - 0.10 - 0.01)),
+        # Lower alpha, higher beta
+        (var_r * 0.01, 0.05, 0.90),
+        # Higher alpha, lower beta
+        (var_r * 0.10, 0.20, 0.70),
+        # Very low omega
+        (var_r * 0.001, 0.15, 0.75),
+        # Equal alpha and beta
+        (var_r * 0.02, 0.12, 0.12),
+    ]
 
-    try:
-        result = minimize(
-            nll,
-            np.array([omega0, alpha0, beta0]),
-            method="L-BFGS-B",
-            bounds=[(1e-8, None), (0, 0.5), (0, 0.999)],
-            options={"maxiter": max_iter},
-        )
-    except Exception:
-        return _make_constant_vol(returns)
-
-    if not result.success:
-        # Try with different starting point
-        omega0b = var_r * 0.01
-        alpha0b = 0.05
-        beta0b = 0.90
+    for omega0, alpha0, beta0 in initial_guesses:
         try:
             result = minimize(
                 nll,
-                np.array([omega0b, alpha0b, beta0b]),
+                np.array([omega0, alpha0, beta0]),
                 method="L-BFGS-B",
-                bounds=[(1e-8, None), (0, 0.5), (0, 0.999)],
-                options={"maxiter": max_iter},
+                bounds=[(1e-10, None), (0, 0.5), (0, 0.999)],
+                options={"maxiter": max_iter, "disp": False},
             )
+            
+            if result.success and result.fun < 1e10:
+                omega, alpha, beta = result.x
+                persistence = alpha + beta
+
+                # Ensure valid persistence
+                if persistence >= 1.0:
+                    continue
+
+                # Compute conditional volatility
+                sigma2 = np.empty(n)
+                sigma2[0] = omega / (1 - persistence) if persistence < 1 else var_r / 2.0
+                for t in range(1, n):
+                    sigma2[t] = omega + alpha * r2[t - 1] + beta * sigma2[t - 1]
+
+                return {
+                    "omega": float(omega),
+                    "alpha": float(alpha),
+                    "beta": float(beta),
+                    "persistence": float(persistence),
+                    "half_life": float(
+                        np.log(0.5) / np.log(persistence) if 0 < persistence < 1 else np.inf
+                    ),
+                    "conditional_volatility": np.sqrt(np.maximum(sigma2, 1e-12)),
+                    "converged": True,
+                    "backend": "scipy",
+                }
         except Exception:
-            return _make_constant_vol(returns)
-
-    if result.success and result.fun < 1e10:
-        omega, alpha, beta = result.x
-        persistence = alpha + beta
-
-        # Compute conditional volatility
-        sigma2 = np.empty(n)
-        sigma2[0] = omega / (1 - persistence) if persistence < 1 else var_r / 2.0
-        for t in range(1, n):
-            sigma2[t] = omega + alpha * r2[t - 1] + beta * sigma2[t - 1]
-
-        return {
-            "omega": float(omega),
-            "alpha": float(alpha),
-            "beta": float(beta),
-            "persistence": float(persistence),
-            "half_life": float(
-                np.log(0.5) / np.log(persistence) if 0 < persistence < 1 else np.inf
-            ),
-            "conditional_volatility": np.sqrt(np.maximum(sigma2, 1e-12)),
-            "converged": True,
-            "backend": "scipy",
-        }
+            continue
 
     return _make_constant_vol(returns)
 

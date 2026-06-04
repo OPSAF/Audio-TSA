@@ -18,6 +18,23 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch, FancyArrowPatch
 from matplotlib.colors import ListedColormap
 
+# Set font to ensure no encoding issues - try multiple fonts
+import matplotlib.font_manager as fm
+# Try to find available fonts
+available_fonts = [f.name for f in fm.fontManager.ttflist]
+# Preferred fonts in order of preference
+font_candidates = ['DejaVu Sans', 'Arial', 'Helvetica', 'Tahoma', 'Verdana', 'Calibri', 'Segoe UI', 'Microsoft YaHei', 'SimHei']
+selected_font = 'DejaVu Sans'
+for font in font_candidates:
+    if font in available_fonts:
+        selected_font = font
+        break
+plt.rcParams['font.family'] = selected_font
+plt.rcParams['axes.unicode_minus'] = False
+# Additional settings to prevent encoding issues
+plt.rcParams['font.size'] = 10
+plt.rcParams['figure.dpi'] = 100
+
 
 # ---------------------------------------------------------------------------
 # Colours
@@ -175,7 +192,7 @@ def plot_segment_mapping(
     dyn1: Dict,
     dyn2: Dict,
     save_path: Optional[str] = None,
-    title: str = "Cross-Audio — Discovered Segment Correspondences",
+    title: str = "Cross-Audio - Discovered Segment Correspondences",
 ) -> plt.Figure:
     """
     For each dimension, show the trend curves of both audios and draw
@@ -187,11 +204,54 @@ def plot_segment_mapping(
         if d.segment_matches and d.meta.get("n_matches", 0) > 0
     ]
 
-    if not dims_with_matches:
-        fig, ax = plt.subplots(figsize=(10, 4))
-        ax.text(0.5, 0.5, "No corresponding segments discovered between the two audios.",
-                ha="center", va="center", fontsize=12, transform=ax.transAxes)
-        ax.set_title(title)
+    # Also check if discoveries list itself has items with matches
+    all_discoveries_have_matches = any(
+        d.segment_matches and d.meta.get("n_matches", 0) > 0 
+        for d in (discoveries or [])
+    )
+
+    if not dims_with_matches and not all_discoveries_have_matches:
+        # Show a more informative empty state with both audio trends
+        fig, axes = plt.subplots(2, 1, figsize=(14, 8))
+        fig.suptitle(title, fontsize=14, fontweight="bold")
+        
+        times1 = dyn1.get("times", [])
+        times2 = dyn2.get("times", [])
+        
+        # Show Audio A trends
+        ax1 = axes[0]
+        ax1.set_title("Audio A - Trend Curves", fontsize=11)
+        for key in ["energy", "brightness", "complexity", "rhythm"]:
+            if key in dyn1 and key in DIM_COLORS:
+                data = dyn1[key]
+                norm_data = (data - data.min()) / (data.max() - data.min() + 1e-12)
+                ax1.plot(times1[:len(norm_data)], norm_data, color=DIM_COLORS[key], 
+                        linewidth=1.2, alpha=0.85, label=key)
+        ax1.set_ylabel("Normalized", fontsize=10)
+        ax1.legend(loc="upper right", fontsize=8)
+        ax1.grid(alpha=0.2)
+        
+        # Show Audio B trends  
+        ax2 = axes[1]
+        ax2.set_title("Audio B - Trend Curves", fontsize=11)
+        for key in ["energy", "brightness", "complexity", "rhythm"]:
+            if key in dyn2 and key in DIM_COLORS:
+                data = dyn2[key]
+                norm_data = (data - data.min()) / (data.max() - data.min() + 1e-12)
+                ax2.plot(times2[:len(norm_data)], norm_data, color=DIM_COLORS[key],
+                        linewidth=1.2, alpha=0.85, label=key)
+        ax2.set_ylabel("Normalized", fontsize=10)
+        ax2.set_xlabel("Time (s)", fontsize=10)
+        ax2.legend(loc="upper right", fontsize=8)
+        ax2.grid(alpha=0.2)
+        
+        # Add info text
+        fig.text(0.5, 0.02, 
+                "No significant segment correspondences found between the two audios.\n"
+                "The two audios may have different structures or the similarity threshold was not met.",
+                ha="center", va="bottom", fontsize=10, color="#666666",
+                style="italic")
+        
         if save_path:
             fig.savefig(save_path, dpi=120, bbox_inches="tight")
             plt.close(fig)
@@ -244,7 +304,7 @@ def plot_segment_mapping(
         ax.legend(loc="upper right", fontsize=8)
         ax.grid(alpha=0.2)
         ax.set_title(
-            f"{disc.title} — {disc.meta.get('n_matches', 0)} matches, "
+            f"{disc.title} - {disc.meta.get('n_matches', 0)} matches, "
             f"avg confidence {disc.meta.get('avg_confidence', 0):.2f}",
             fontsize=11,
         )
@@ -267,12 +327,56 @@ def plot_contrast_panel(
     dyn1: Dict,
     dyn2: Dict,
     save_path: Optional[str] = None,
-    title: str = "Audio Contrast — Where They Differ",
+    title: str = "Audio Contrast - Where They Differ",
 ) -> plt.Figure:
     """
     Side-by-side distribution comparison for each dimension,
     highlighting where the two audios diverge.
     """
+    # Handle empty contrasts
+    if not contrasts:
+        fig, ax = plt.subplots(figsize=(12, 6))
+        fig.suptitle(title, fontsize=14, fontweight="bold")
+        
+        # Show both audio distributions for comparison
+        times1 = dyn1.get("times", [])
+        times2 = dyn2.get("times", [])
+        
+        # Create a 2x2 grid of basic comparisons
+        dims_to_show = ["energy", "brightness", "complexity", "rhythm"]
+        
+        for idx, key in enumerate(dims_to_show):
+            ax_sub = fig.add_axes([0.05 + (idx % 2) * 0.47, 0.55 - (idx // 2) * 0.45, 0.42, 0.35])
+            
+            if key in dyn1 and key in dyn2:
+                a = dyn1[key]
+                b = dyn2[key]
+                
+                bins = max(8, min(25, int(np.sqrt(min(len(a), len(b))))))
+                ax_sub.hist(a, bins=bins, alpha=0.6, color=DIM_COLORS.get(key, "#333"), 
+                           label="Audio A", density=True, edgecolor="white", linewidth=0.5)
+                ax_sub.hist(b, bins=bins, alpha=0.4, color="gray", 
+                           label="Audio B", density=True, edgecolor="white", linewidth=0.5)
+                ax_sub.set_title(f"{key.capitalize()}", fontsize=10)
+                ax_sub.legend(fontsize=7)
+                if idx >= 2:
+                    ax_sub.set_xlabel("Value", fontsize=8)
+                ax_sub.set_ylabel("Density", fontsize=8)
+            else:
+                ax_sub.text(0.5, 0.5, f"No data for {key}", ha="center", va="center",
+                           transform=ax_sub.transAxes, color="gray")
+                ax_sub.set_title(f"{key.capitalize()}", fontsize=10)
+        
+        fig.text(0.5, 0.02, 
+                "No significant contrasts detected - the two audios show similar distributions.",
+                ha="center", va="bottom", fontsize=10, color="#666666", style="italic")
+        
+        if save_path:
+            fig.savefig(save_path, dpi=120, bbox_inches="tight")
+            plt.close(fig)
+            return None
+        return fig
+    
     n = len(contrasts)
     fig, axes = plt.subplots(1, n, figsize=(4.5 * n, 4), squeeze=False)
     fig.suptitle(title, fontsize=14, fontweight="bold")
@@ -356,12 +460,12 @@ def plot_discovery_summary(
     # ---- Left panel (0.45-0.78): Character profiles side-by-side ----
     ax_profile_a = fig.add_axes([0.03, 0.52, 0.22, 0.23])
     ax_profile_a.axis("off")
-    ax_profile_a.set_title("Audio A — Character", fontsize=11, fontweight="bold")
+    ax_profile_a.set_title("Audio A - Character", fontsize=11, fontweight="bold")
     _draw_character_card(ax_profile_a, report.audio_a_profile)
 
     ax_profile_b = fig.add_axes([0.26, 0.52, 0.22, 0.23])
     ax_profile_b.axis("off")
-    ax_profile_b.set_title("Audio B — Character", fontsize=11, fontweight="bold")
+    ax_profile_b.set_title("Audio B - Character", fontsize=11, fontweight="bold")
     _draw_character_card(ax_profile_b, report.audio_b_profile)
 
     # ---- Left panel (0-0.52): Contrast summary ----
@@ -527,7 +631,7 @@ def generate_discovery_report_plots(
             },
         }
         path = os.path.join(output_dir, "self_discovery_a.png")
-        plot_self_discovery(self_a, save_path=path, title="Audio A — Self-Discovery")
+        plot_self_discovery(self_a, save_path=path, title="Audio A - Self-Discovery")
         saved.append("self_discovery_a.png")
 
     # 2. Self-discovery for Audio B
@@ -548,7 +652,7 @@ def generate_discovery_report_plots(
             },
         }
         path = os.path.join(output_dir, "self_discovery_b.png")
-        plot_self_discovery(self_b, save_path=path, title="Audio B — Self-Discovery")
+        plot_self_discovery(self_b, save_path=path, title="Audio B - Self-Discovery")
         saved.append("self_discovery_b.png")
 
     # 3. Cross-discovery segment mapping

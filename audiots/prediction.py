@@ -6,47 +6,71 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 import warnings
 
-warnings.filterwarnings('ignore')
+warnings.filterwarnings("ignore")
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=RuntimeWarning)
+
+from . import config as _cfg
+from .prediction_cache import get_prediction_cache
+
+# ---------------------------------------------------------------------------
+# Safe stdout suppression for noisy third-party libs (e.g. hmmlearn)
+# ---------------------------------------------------------------------------
+import sys as _sys
+from contextlib import redirect_stdout as _redirect_stdout
+from io import StringIO as _StringIO
 
 # 全局GPU检测
 import torch
 _GLOBAL_DEVICE = None
 _GLOBAL_DEVICE_INFO = None
 
-def get_device(force_check=False):
+_VERBOSE_GPU = False  # set True to re-enable GPU detection logging
+
+
+def get_device(force_check=False, verbose=None):
     """Get global device (GPU if available, else CPU) with detailed info."""
     global _GLOBAL_DEVICE, _GLOBAL_DEVICE_INFO
-    
+
+    if verbose is None:
+        verbose = _VERBOSE_GPU
+
     if _GLOBAL_DEVICE is None or force_check:
         if torch.cuda.is_available():
-            _GLOBAL_DEVICE = torch.device('cuda')
+            _GLOBAL_DEVICE = torch.device("cuda")
             _GLOBAL_DEVICE_INFO = {
-                'type': 'cuda',
-                'name': torch.cuda.get_device_name(0),
-                'memory_total': f"{torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB",
-                'memory_allocated': lambda: f"{torch.cuda.memory_allocated(0) / 1e9:.2f} GB",
-                'memory_cached': lambda: f"{torch.cuda.memory_reserved(0) / 1e9:.2f} GB"
+                "type": "cuda",
+                "name": torch.cuda.get_device_name(0),
+                "memory_total": f"{torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB",
+                "memory_allocated": lambda: f"{torch.cuda.memory_allocated(0) / 1e9:.2f} GB",
+                "memory_cached": lambda: f"{torch.cuda.memory_reserved(0) / 1e9:.2f} GB",
             }
-            print(f"[GPU INFO] Found CUDA device: {_GLOBAL_DEVICE_INFO['name']}")
-            print(f"[GPU INFO] Total memory: {_GLOBAL_DEVICE_INFO['memory_total']}")
+            if verbose:
+                print(f"[GPU INFO] Found CUDA device: {_GLOBAL_DEVICE_INFO['name']}")
+                print(f"[GPU INFO] Total memory: {_GLOBAL_DEVICE_INFO['memory_total']}")
         else:
-            _GLOBAL_DEVICE = torch.device('cpu')
-            _GLOBAL_DEVICE_INFO = {'type': 'cpu', 'name': 'CPU', 'memory_total': 'N/A'}
-            print("[GPU INFO] WARNING: CUDA not available! Using CPU (will be very slow)")
-    
+            _GLOBAL_DEVICE = torch.device("cpu")
+            _GLOBAL_DEVICE_INFO = {"type": "cpu", "name": "CPU", "memory_total": "N/A"}
+            if verbose:
+                print("[GPU INFO] WARNING: CUDA not available! Using CPU (will be very slow)")
+
     return _GLOBAL_DEVICE, _GLOBAL_DEVICE_INFO
 
 def print_gpu_usage():
     """Print current GPU memory usage."""
-    if _GLOBAL_DEVICE_INFO and _GLOBAL_DEVICE_INFO['type'] == 'cuda':
-        print(f"[GPU USAGE] Allocated: {_GLOBAL_DEVICE_INFO['memory_allocated']()}, "
-              f"Cached: {_GLOBAL_DEVICE_INFO['memory_cached']()}")
+    if _GLOBAL_DEVICE_INFO and _GLOBAL_DEVICE_INFO["type"] == "cuda":
+        print(
+            f"[GPU USAGE] Allocated: {_GLOBAL_DEVICE_INFO['memory_allocated']()}, "
+            f"Cached: {_GLOBAL_DEVICE_INFO['memory_cached']()}"
+        )
 
-def clear_gpu_cache():
+
+def clear_gpu_cache(verbose=False):
     """Clear GPU memory cache."""
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
-        print("[GPU INFO] Cleared CUDA cache")
+        if verbose:
+            print("[GPU INFO] Cleared CUDA cache")
 
 
 def prepare_sequence_data(series, lookback=30, forecast_horizon=10):
@@ -152,34 +176,64 @@ def predict_arima(series, forecast_horizon=10):
         return fallback_forecast, {'RMSE': np.nan, 'MAE': np.nan, 'MSE': np.nan, 'error': str(e)}
 
 
-def predict_hmm(series, forecast_horizon=10, n_components=8):
+def predict_hmm(series, forecast_horizon=10, n_components=None):
     """HMM (Hidden Markov Model) with Gaussian emissions for prediction."""
     try:
         from hmmlearn import hmm
+
+        # Auto-limit components based on data size
+        n = len(series)
+        if n_components is None:
+            n_components = _cfg.DEFAULT_HMM_COMPONENTS
+        max_states = min(_cfg.MAX_HMM_COMPONENTS, max(2, n // 10))
+        n_components = min(n_components, max_states)
 
         train_size = int(len(series) * 0.8)
         train = series[:train_size].reshape(-1, 1)
         test = series[train_size:train_size + forecast_horizon]
 
+        # Try multiple component counts and pick the best
+        candidates = list(set([max(2, n_components - 1), n_components, min(_cfg.MAX_HMM_COMPONENTS, n_components + 1)]))
         best_model = None
         best_score = -np.inf
+        best_n_comp = n_components
 
-        for n_comp in [n_components]:
-            for _ in range(3):
-                model = hmm.GaussianHMM(
-                    n_components=n_comp, covariance_type='full',
-                    n_iter=200, tol=1e-4, random_state=np.random.randint(0, 10000))
+        for n_comp in sorted(candidates):
+            for attempt in range(3):
                 try:
-                    model.fit(train)
-                    score = model.score(train)
-                    if score > best_score:
-                        best_score = score
-                        best_model = model
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore")
+                        model = hmm.GaussianHMM(
+                            n_components=n_comp,
+                            covariance_type=_cfg.DEFAULT_HMM_COVARIANCE,
+                            n_iter=_cfg.HMM_N_ITER,
+                            tol=_cfg.HMM_TOL,
+                            random_state=np.random.randint(0, 10000),
+                        )
+                        with _redirect_stdout(_StringIO()):
+                            model.fit(train)
+                        score = model.score(train)
+                        # Penalise models with degenerate transition rows
+                        transmat = model.transmat_
+                        row_sums = transmat.sum(axis=1)
+                        if np.any(row_sums < 1e-10):
+                            score -= 1000  # heavy penalty for degenerate transmat
+                        if score > best_score:
+                            best_score = score
+                            best_model = model
+                            best_n_comp = n_comp
                 except Exception:
                     pass
 
+        # Fallback: use last-value persistence if all HMM fits fail
         if best_model is None:
-            return np.zeros(forecast_horizon), {'RMSE': np.nan, 'MAE': np.nan, 'MSE': np.nan, 'error': 'HMM fit failed'}
+            s = np.asarray(series, dtype=np.float64).ravel()
+            last_val = float(s[-1]) if len(s) > 0 else 0.0
+            forecast = np.full(forecast_horizon, last_val)
+            return forecast, {
+                "RMSE": np.nan, "MAE": np.nan, "MSE": np.nan,
+                "error": "HMM fit failed — using persistence fallback",
+            }
 
         last_hidden = best_model.predict(train[-30:])
         last_state = last_hidden[-1]
@@ -188,17 +242,34 @@ def predict_hmm(series, forecast_horizon=10, n_components=8):
         current_state = last_state
         for i in range(forecast_horizon):
             forecast[i] = best_model.means_[current_state].item()
-            current_state = np.argmax(best_model.transmat_[current_state])
+            # If transmat row is degenerate, stay in current state
+            row = best_model.transmat_[current_state]
+            if row.sum() > 1e-10:
+                current_state = np.argmax(row)
+            # else: stay in same state (row is all zeros)
+
+        # ---- fallback for degenerate / constant forecasts ----
+        fc_std = float(np.std(forecast)) if len(forecast) > 1 else 0.0
+        if fc_std < 1e-10 or np.any(~np.isfinite(forecast)) or np.all(forecast == 0):
+            # HMM collapsed to a single state — use persistence forecast
+            last_vals = train[-1].ravel() if train.ndim > 1 else train[-1]
+            last_val = float(last_vals.item() if hasattr(last_vals, "item") else last_vals)
+            forecast = np.full(forecast_horizon, last_val)
 
         if len(test) >= forecast_horizon:
             metrics = compute_metrics(test[:forecast_horizon], forecast)
         else:
-            metrics = {'RMSE': np.nan, 'MAE': np.nan, 'MSE': np.nan}
+            metrics = {"RMSE": np.nan, "MAE": np.nan, "MSE": np.nan}
 
         return forecast, metrics
 
     except Exception as e:
-        return np.zeros(forecast_horizon), {'RMSE': np.nan, 'MAE': np.nan, 'MSE': np.nan, 'error': str(e)}
+        s = np.asarray(series, dtype=np.float64).ravel()
+        last_val = float(s[-1]) if len(s) > 0 else 0.0
+        return np.full(forecast_horizon, last_val), {
+            "RMSE": np.nan, "MAE": np.nan, "MSE": np.nan,
+            "error": str(e),
+        }
 
 
 class LSTMPredictor:
@@ -213,10 +284,11 @@ class LSTMPredictor:
         self._model = None
         self.device = None
 
-    def _get_device(self):
+    def _get_device(self, verbose=False):
         """Get device using global detection."""
         self.device, device_info = get_device()
-        print(f"  [LSTM] Device: {device_info['type'].upper()} ({device_info['name']})")
+        if verbose:
+            print(f"  [LSTM] Device: {device_info['type'].upper()} ({device_info['name']})")
         return self.device
 
     def _build_model(self, forecast_horizon):
@@ -239,9 +311,26 @@ class LSTMPredictor:
             self.lookback, self.hidden_size, self.num_layers,
             self.dropout, forecast_horizon)
 
-    def predict(self, series, forecast_horizon=10, epochs=30, lr=0.001):
+    def predict(self, series, forecast_horizon=10, epochs=30, lr=0.001, verbose=False):
         import torch
         import torch.nn as nn
+
+        # --- prediction cache ---
+        cache = get_prediction_cache()
+        cached = cache.get(series, "lstm", self.lookback, forecast_horizon, epochs)
+        if cached is not None:
+            if verbose:
+                print("  [LSTM] Using cached prediction")
+            return cached
+
+        # --- data-size guard ---
+        if len(series) < _cfg.MIN_WINDOWS_DEEP_MODEL:
+            if verbose:
+                print(f"  [LSTM] Skipped: series too short ({len(series)} < {_cfg.MIN_WINDOWS_DEEP_MODEL})")
+            result = (np.zeros(forecast_horizon), {"RMSE": np.nan, "MAE": np.nan, "MSE": np.nan,
+                       "error": f"Series too short for LSTM ({len(series)})"})
+            cache.put(series, "lstm", self.lookback, forecast_horizon, epochs, result)
+            return result
 
         train_size = int(len(series) * 0.8)
         train_segment = series[:train_size]
@@ -251,31 +340,38 @@ class LSTMPredictor:
 
         X, y = prepare_sequence_data(train_scaled, self.lookback, forecast_horizon)
         if len(X) == 0:
-            return np.zeros(forecast_horizon), {'RMSE': np.nan, 'MAE': np.nan, 'MSE': np.nan}
+            result = (np.zeros(forecast_horizon), {"RMSE": np.nan, "MAE": np.nan, "MSE": np.nan})
+            cache.put(series, "lstm", self.lookback, forecast_horizon, epochs, result)
+            return result
 
         if self._model is None:
             self._build_model(forecast_horizon)
 
-        device = self._get_device()
+        device = self._get_device(verbose=verbose)
         use_amp = torch.cuda.is_available()
-        
-        print(f"  [LSTM] Moving model to {device.type.upper()}...")
+
+        if verbose:
+            print(f"  [LSTM] Moving model to {device.type.upper()}...")
         model = self._model.to(device)
 
-        print(f"  [LSTM] Moving data to {device.type.upper()}...")
+        if verbose:
+            print(f"  [LSTM] Moving data to {device.type.upper()}...")
         X_t = torch.tensor(X, dtype=torch.float32).unsqueeze(-1).to(device)
         y_t = torch.tensor(y, dtype=torch.float32).to(device)
 
         batch_size = min(256, len(X))
         dataset = torch.utils.data.TensorDataset(X_t, y_t)
-        pin_memory = torch.cuda.is_available() and X_t.device.type == 'cpu'
-        dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, pin_memory=pin_memory)
+        pin_memory = torch.cuda.is_available() and X_t.device.type == "cpu"
+        dataloader = torch.utils.data.DataLoader(
+            dataset, batch_size=batch_size, shuffle=True, pin_memory=pin_memory
+        )
 
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
         criterion = nn.MSELoss()
-        scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
+        scaler_amp = torch.cuda.amp.GradScaler(enabled=use_amp)
 
-        print(f"  [LSTM] Training for {epochs} epochs...")
+        if verbose:
+            print(f"  [LSTM] Training for {epochs} epochs...")
         model.train()
         for epoch in range(epochs):
             for batch_X, batch_y in dataloader:
@@ -284,9 +380,9 @@ class LSTMPredictor:
                     pred = model(batch_X)
                     loss = criterion(pred, batch_y)
 
-                scaler.scale(loss).backward()
-                scaler.step(optimizer)
-                scaler.update()
+                scaler_amp.scale(loss).backward()
+                scaler_amp.step(optimizer)
+                scaler_amp.update()
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
@@ -294,9 +390,14 @@ class LSTMPredictor:
         with torch.no_grad():
             with torch.cuda.amp.autocast(enabled=use_amp):
                 last_window = train_scaled[-self.lookback:]
-                last_input = torch.tensor(last_window, dtype=torch.float32).unsqueeze(0).unsqueeze(-1).to(device)
+                last_input = (
+                    torch.tensor(last_window, dtype=torch.float32)
+                    .unsqueeze(0)
+                    .unsqueeze(-1)
+                    .to(device)
+                )
                 pred_scaled = model(last_input).cpu().numpy().flatten()
-        
+
         clear_gpu_cache()
 
         forecast = self.scaler.inverse_transform(pred_scaled.reshape(-1, 1)).flatten()
@@ -304,9 +405,11 @@ class LSTMPredictor:
         if len(test_segment) >= forecast_horizon:
             metrics = compute_metrics(test_segment[:forecast_horizon], forecast)
         else:
-            metrics = {'RMSE': np.nan, 'MAE': np.nan, 'MSE': np.nan}
+            metrics = {"RMSE": np.nan, "MAE": np.nan, "MSE": np.nan}
 
-        return forecast, metrics
+        result = (forecast, metrics)
+        cache.put(series, "lstm", self.lookback, forecast_horizon, epochs, result)
+        return result
 
 
 class TransformerPredictor:
@@ -322,10 +425,11 @@ class TransformerPredictor:
         self._model = None
         self.device = None
 
-    def _get_device(self):
+    def _get_device(self, verbose=False):
         """Get device using global detection."""
         self.device, device_info = get_device()
-        print(f"  [Transformer] Device: {device_info['type'].upper()} ({device_info['name']})")
+        if verbose:
+            print(f"  [Transformer] Device: {device_info['type'].upper()} ({device_info['name']})")
         return self.device
 
     def _build_model(self, forecast_horizon):
@@ -366,9 +470,26 @@ class TransformerPredictor:
             self.lookback, self.d_model, self.nhead,
             self.num_layers, self.dropout, forecast_horizon)
 
-    def predict(self, series, forecast_horizon=10, epochs=30, lr=0.001):
+    def predict(self, series, forecast_horizon=10, epochs=30, lr=0.001, verbose=False):
         import torch
         import torch.nn as nn
+
+        # --- prediction cache ---
+        cache = get_prediction_cache()
+        cached = cache.get(series, "transformer", self.lookback, forecast_horizon, epochs)
+        if cached is not None:
+            if verbose:
+                print("  [Transformer] Using cached prediction")
+            return cached
+
+        # --- data-size guard ---
+        if len(series) < _cfg.MIN_WINDOWS_DEEP_MODEL:
+            if verbose:
+                print(f"  [Transformer] Skipped: series too short ({len(series)} < {_cfg.MIN_WINDOWS_DEEP_MODEL})")
+            result = (np.zeros(forecast_horizon), {"RMSE": np.nan, "MAE": np.nan, "MSE": np.nan,
+                       "error": f"Series too short for Transformer ({len(series)})"})
+            cache.put(series, "transformer", self.lookback, forecast_horizon, epochs, result)
+            return result
 
         train_size = int(len(series) * 0.8)
         train_segment = series[:train_size]
@@ -378,32 +499,39 @@ class TransformerPredictor:
 
         X, y = prepare_sequence_data(train_scaled, self.lookback, forecast_horizon)
         if len(X) == 0:
-            return np.zeros(forecast_horizon), {'RMSE': np.nan, 'MAE': np.nan, 'MSE': np.nan}
+            result = (np.zeros(forecast_horizon), {"RMSE": np.nan, "MAE": np.nan, "MSE": np.nan})
+            cache.put(series, "transformer", self.lookback, forecast_horizon, epochs, result)
+            return result
 
         if self._model is None:
             self._build_model(forecast_horizon)
 
-        device = self._get_device()
+        device = self._get_device(verbose=verbose)
         use_amp = torch.cuda.is_available()
-        
-        print(f"  [Transformer] Moving model to {device.type.upper()}...")
+
+        if verbose:
+            print(f"  [Transformer] Moving model to {device.type.upper()}...")
         model = self._model.to(device)
 
-        print(f"  [Transformer] Moving data to {device.type.upper()}...")
+        if verbose:
+            print(f"  [Transformer] Moving data to {device.type.upper()}...")
         X_t = torch.tensor(X, dtype=torch.float32).unsqueeze(-1).to(device)
         y_t = torch.tensor(y, dtype=torch.float32).to(device)
 
         batch_size = min(256, len(X))
         dataset = torch.utils.data.TensorDataset(X_t, y_t)
-        pin_memory = torch.cuda.is_available() and X_t.device.type == 'cpu'
-        dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, pin_memory=pin_memory)
+        pin_memory = torch.cuda.is_available() and X_t.device.type == "cpu"
+        dataloader = torch.utils.data.DataLoader(
+            dataset, batch_size=batch_size, shuffle=True, pin_memory=pin_memory
+        )
 
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
         criterion = nn.MSELoss()
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=15, gamma=0.5)
-        scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
+        scaler_amp = torch.cuda.amp.GradScaler(enabled=use_amp)
 
-        print(f"  [Transformer] Training for {epochs} epochs...")
+        if verbose:
+            print(f"  [Transformer] Training for {epochs} epochs...")
         model.train()
         for epoch in range(epochs):
             for batch_X, batch_y in dataloader:
@@ -412,11 +540,11 @@ class TransformerPredictor:
                     pred = model(batch_X)
                     loss = criterion(pred, batch_y)
 
-                scaler.scale(loss).backward()
-                scaler.unscale_(optimizer)
+                scaler_amp.scale(loss).backward()
+                scaler_amp.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-                scaler.step(optimizer)
-                scaler.update()
+                scaler_amp.step(optimizer)
+                scaler_amp.update()
             scheduler.step()
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
@@ -425,9 +553,14 @@ class TransformerPredictor:
         with torch.no_grad():
             with torch.cuda.amp.autocast(enabled=use_amp):
                 last_window = train_scaled[-self.lookback:]
-                last_input = torch.tensor(last_window, dtype=torch.float32).unsqueeze(0).unsqueeze(-1).to(device)
+                last_input = (
+                    torch.tensor(last_window, dtype=torch.float32)
+                    .unsqueeze(0)
+                    .unsqueeze(-1)
+                    .to(device)
+                )
                 pred_scaled = model(last_input).cpu().numpy().flatten()
-        
+
         clear_gpu_cache()
 
         forecast = self.scaler.inverse_transform(pred_scaled.reshape(-1, 1)).flatten()
@@ -435,13 +568,18 @@ class TransformerPredictor:
         if len(test_segment) >= forecast_horizon:
             metrics = compute_metrics(test_segment[:forecast_horizon], forecast)
         else:
-            metrics = {'RMSE': np.nan, 'MAE': np.nan, 'MSE': np.nan}
+            metrics = {"RMSE": np.nan, "MAE": np.nan, "MSE": np.nan}
 
-        return forecast, metrics
+        result = (forecast, metrics)
+        cache.put(series, "transformer", self.lookback, forecast_horizon, epochs, result)
+        return result
 
 
-def run_all_predictions(mel_spec, forecast_horizon=20, verbose=True):
+def run_all_predictions(mel_spec, forecast_horizon=20, epochs=None, verbose=True):
     """Run all four prediction models on mel spectrogram."""
+    if epochs is None:
+        epochs = _cfg.DEFAULT_PREDICTION_EPOCHS
+
     mel_mean = np.mean(mel_spec, axis=0)
 
     train_size = int(len(mel_mean) * 0.8)
@@ -454,24 +592,28 @@ def run_all_predictions(mel_spec, forecast_horizon=20, verbose=True):
     if verbose:
         print("  [1/4] Running ARIMA...")
     arima_forecast, arima_metrics = predict_arima(train_series, forecast_horizon)
-    results['ARIMA'] = (arima_forecast, arima_metrics, true_values)
+    results["ARIMA"] = (arima_forecast, arima_metrics, true_values)
 
     if verbose:
         print("  [2/4] Running HMM...")
     hmm_forecast, hmm_metrics = predict_hmm(train_series, forecast_horizon)
-    results['HMM'] = (hmm_forecast, hmm_metrics, true_values)
+    results["HMM"] = (hmm_forecast, hmm_metrics, true_values)
 
     if verbose:
         print("  [3/4] Running LSTM...")
     lstm = LSTMPredictor(lookback=30)
-    lstm_forecast, lstm_metrics = lstm.predict(train_series, forecast_horizon, epochs=60)
-    results['LSTM'] = (lstm_forecast, lstm_metrics, true_values)
+    lstm_forecast, lstm_metrics = lstm.predict(
+        train_series, forecast_horizon, epochs=epochs, verbose=verbose
+    )
+    results["LSTM"] = (lstm_forecast, lstm_metrics, true_values)
 
     if verbose:
         print("  [4/4] Running Transformer...")
     transformer = TransformerPredictor(lookback=30)
-    tf_forecast, tf_metrics = transformer.predict(train_series, forecast_horizon, epochs=60)
-    results['Transformer'] = (tf_forecast, tf_metrics, true_values)
+    tf_forecast, tf_metrics = transformer.predict(
+        train_series, forecast_horizon, epochs=epochs, verbose=verbose
+    )
+    results["Transformer"] = (tf_forecast, tf_metrics, true_values)
 
     return results
 

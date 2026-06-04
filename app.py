@@ -207,15 +207,19 @@ def analyze_audio_with_progress(task_id, filepath1, filepath2=None, forecast_hor
                 f"GARCH α+β={s.get('garch_persistence') or 0:.3f} "
                 f"(converged={s.get('garch_converged', False)})")
 
-        # ---- Trend predictions ----
-        log_progress(task_id, "[TrendPred] 对4个趋势进行预测...")
-        trend_preds = prediction.predict_all_trends(dyn1, forecast_horizon=forecast_horizon, verbose=False)
+        # ---- Trend predictions (fast models only: ARIMA + HMM) ----
+        log_progress(task_id, "[TrendPred] 对4个趋势进行预测 (ARIMA + HMM)...")
+        trend_preds = prediction.predict_all_trends(
+            dyn1, forecast_horizon=forecast_horizon, models="ARIMA,HMM", verbose=False
+        )
         results['trend_predictions'] = trend_preds
         log_progress(task_id, "[完成] 趋势预测完成")
 
-        # ---- Volatility predictions ----
-        log_progress(task_id, "[VolPred] 对波动率进行预测...")
-        vol_preds = prediction.predict_all_volatilities(vol1, forecast_horizon=min(10, forecast_horizon), verbose=False)
+        # ---- Volatility predictions (fast models only) ----
+        log_progress(task_id, "[VolPred] 对波动率进行预测 (ARIMA + HMM)...")
+        vol_preds = prediction.predict_all_volatilities(
+            vol1, forecast_horizon=min(10, forecast_horizon), models="ARIMA,HMM", verbose=False
+        )
         results['volatility_predictions'] = vol_preds
         log_progress(task_id, "[完成] 波动率预测完成")
 
@@ -243,7 +247,7 @@ def analyze_audio_with_progress(task_id, filepath1, filepath2=None, forecast_hor
 
         log_progress(task_id, "[Model] 运行四种模型的结构侦探分析...")
         model_report = model_analysis.analyze_model_ensemble(
-            dyn1, n_hmm_states=3, lstm_epochs=20, transformer_epochs=20, verbose=False)
+            dyn1, n_hmm_states=3, lstm_epochs=15, transformer_epochs=15, verbose=False)
         results['model_analysis'] = model_report
 
         # Summarize key findings
@@ -328,7 +332,9 @@ def analyze_audio_with_progress(task_id, filepath1, filepath2=None, forecast_hor
             log_progress(task_id, "=" * 50, 'divider')
             
             log_progress(task_id, "[Pred] 运行所有预测模型 (ARIMA, HMM, LSTM, Transformer)...")
-            results['predictions'] = prediction.run_all_predictions(mel_spec, forecast_horizon=forecast_horizon, verbose=False)
+            results['predictions'] = prediction.run_all_predictions(
+                mel_spec, forecast_horizon=forecast_horizon, epochs=30, verbose=False
+            )
             
             log_progress(task_id, "[完成] 模型性能摘要:")
             for model_name, (forecast, metrics, true) in results['predictions'].items():
@@ -344,7 +350,9 @@ def analyze_audio_with_progress(task_id, filepath1, filepath2=None, forecast_hor
             log_progress(task_id, "=" * 50, 'divider')
             
             log_progress(task_id, "[Band] 分析频带可预测性...")
-            band_results = band_analysis.analyze_band_predictability(mel_spec, forecast_horizon=forecast_horizon)
+            band_results = band_analysis.analyze_band_predictability(
+                mel_spec, forecast_horizon=forecast_horizon, epochs=30
+            )
             results['band_results'] = band_results
             results['band_summary'] = band_analysis.compute_band_error_summary(band_results)
             results['predictability_rank'] = band_analysis.get_predictability_rank(results['band_summary'])
@@ -676,7 +684,23 @@ def stream(task_id):
                                     'dynamics_similarity',
                                     'volatility', 'volatility_summary',
                                     'trend_predictions', 'volatility_predictions',
+                                    'band_results',  # Will be processed separately
                                 )}
+                
+                # Process band_results for serialization
+                if results.get('band_results'):
+                    band_results_serializable = {}
+                    for band_key, band_data in results['band_results'].items():
+                        band_results_serializable[band_key] = {
+                            'info': band_data['info'],
+                            'predictions': {}
+                        }
+                        for model_name, model_data in band_data['predictions'].items():
+                            band_results_serializable[band_key]['predictions'][model_name] = {
+                                'metrics': model_data['metrics']
+                            }
+                    serializable['band_results'] = band_results_serializable
+                
                 if results.get('discovery_serializable'):
                     serializable['discovery'] = results['discovery_serializable']
                 if results.get('unsupervised_serializable'):
@@ -715,11 +739,18 @@ def stream(task_id):
                         'structural_coherence': results['dynamics_similarity']['structural_coherence'],
                     }
 
+                # Add analysis log
+                if task_id in analysis_progress and analysis_progress[task_id].get('logs'):
+                    serializable['analysis_log'] = [
+                        f"[{log['time']}] {log['message']}"
+                        for log in analysis_progress[task_id]['logs']
+                    ]
+
                 with open(os.path.join(output_dir, 'results.json'), 'w', encoding='utf-8') as f:
                     json.dump(serializable, f, default=str, ensure_ascii=False)
                 
                 log_progress(task_id, "=" * 50, 'divider')
-                log_progress(task_id, "分析完成!", 'success')
+                log_progress(task_id, "Analysis completed!", 'success')
                 log_progress(task_id, "=" * 50, 'divider')
                 update_progress(task_id, 100, 'completed')
                 
@@ -785,6 +816,64 @@ def secure_filename(filename):
     """Simple secure filename function."""
     import re
     return re.sub(r'[^a-zA-Z0-9_\-\.]', '_', filename)
+
+
+@app.route('/docs/')
+@app.route('/docs/<page>')
+def docs(page=None):
+    """Serve documentation pages (rendered from Markdown)."""
+    import markdown
+
+    docs_dir = os.path.join(os.path.dirname(__file__), 'docs')
+
+    # Map page names to files
+    doc_files = {
+        'guide': 'guide.md',
+        'theory': 'theory.md',
+        'analysis': 'analysis.md',
+        'results': 'results.md',
+    }
+
+    if page is None:
+        # Docs index page
+        md_content = """# Audio Lab 文档
+
+欢迎阅读 Audio Lab 音频分析平台文档。请选择以下章节：
+
+| 文档 | 内容 |
+|------|------|
+| [**使用指南**](/docs/guide) | Web 界面操作说明、各分析选项详解 |
+| [**理论基础**](/docs/theory) | 从声波振动到数字信号处理的教学讲解 |
+| [**分析模块详解**](/docs/analysis) | 每个分析模块的算法、输入输出、原理 |
+| [**结果解读**](/docs/results) | 如何看懂图表和分析输出 |
+
+---
+
+返回 [主页](/) | [项目 GitHub](https://github.com/OPSAF/Audio-TSA)
+"""
+        html = markdown.markdown(md_content, extensions=['tables', 'fenced_code'])
+        return render_template('docs.html', content=html, title='文档', page=page)
+
+    if page not in doc_files:
+        return "文档页面不存在", 404
+
+    filepath = os.path.join(docs_dir, doc_files[page])
+    if not os.path.exists(filepath):
+        return "文档文件不存在", 404
+
+    with open(filepath, 'r', encoding='utf-8') as f:
+        md_content = f.read()
+
+    html = markdown.markdown(md_content, extensions=['tables', 'fenced_code', 'codehilite'])
+
+    titles = {
+        'guide': '使用指南',
+        'theory': '理论基础',
+        'analysis': '分析模块详解',
+        'results': '结果解读',
+    }
+
+    return render_template('docs.html', content=html, title=titles.get(page, page), page=page)
 
 
 if __name__ == '__main__':

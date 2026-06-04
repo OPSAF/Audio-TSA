@@ -4,6 +4,8 @@ import numpy as np
 import multiprocessing as mp
 from functools import partial
 
+from . import config as _cfg
+
 
 def downsample_series(series, target_length=200):
     """Downsample series to target length using interpolation."""
@@ -13,13 +15,21 @@ def downsample_series(series, target_length=200):
     return series[indices]
 
 
-def analyze_single_band(band_data, band_info, forecast_horizon=20, epochs=15):
+def analyze_single_band(band_data, band_info, forecast_horizon=20, epochs=None):
     """Analyze a single frequency band with all models."""
+    if epochs is None:
+        epochs = _cfg.DEFAULT_BAND_EPOCHS
+
     from .prediction import predict_arima, predict_hmm, LSTMPredictor, TransformerPredictor, compute_metrics
 
+    # Use same approach as run_all_predictions - no downsampling
     band_mean = np.mean(band_data, axis=0)
-    
-    band_mean = downsample_series(band_mean, target_length=300)
+    band_mean = np.asarray(band_mean, dtype=np.float64).ravel()
+
+    # Ensure minimum length for meaningful prediction
+    if len(band_mean) < forecast_horizon + 10:
+        pad_size = forecast_horizon + 10 - len(band_mean)
+        band_mean = np.pad(band_mean, (0, pad_size), mode="edge")
 
     train_size = int(len(band_mean) * 0.8)
     train_series = band_mean[:train_size]
@@ -27,74 +37,118 @@ def analyze_single_band(band_data, band_info, forecast_horizon=20, epochs=15):
 
     band_results = {}
 
-    arima_forecast, arima_metrics = predict_arima(train_series, forecast_horizon)
-    band_results['ARIMA'] = {
-        'forecast': arima_forecast,
-        'metrics': arima_metrics,
-        'true': true_values
-    }
+    # ARIMA - fast, always run
+    try:
+        arima_forecast, arima_metrics = predict_arima(train_series, forecast_horizon)
+        band_results["ARIMA"] = {
+            "forecast": arima_forecast, "metrics": arima_metrics, "true": true_values,
+        }
+    except Exception as e:
+        band_results["ARIMA"] = {
+            "forecast": np.zeros(forecast_horizon),
+            "metrics": {"RMSE": np.nan, "MAE": np.nan, "MSE": np.nan, "error": str(e)},
+            "true": true_values,
+        }
 
-    hmm_forecast, hmm_metrics = predict_hmm(train_series, forecast_horizon)
-    band_results['HMM'] = {
-        'forecast': hmm_forecast,
-        'metrics': hmm_metrics,
-        'true': true_values
-    }
+    # HMM - fast, always run
+    try:
+        hmm_forecast, hmm_metrics = predict_hmm(train_series, forecast_horizon)
+        band_results["HMM"] = {
+            "forecast": hmm_forecast, "metrics": hmm_metrics, "true": true_values,
+        }
+    except Exception as e:
+        band_results["HMM"] = {
+            "forecast": np.zeros(forecast_horizon),
+            "metrics": {"RMSE": np.nan, "MAE": np.nan, "MSE": np.nan, "error": str(e)},
+            "true": true_values,
+        }
 
-    lstm = LSTMPredictor(lookback=20, hidden_size=32, num_layers=1)
-    lstm_forecast, lstm_metrics = lstm.predict(train_series, forecast_horizon, epochs=epochs)
-    band_results['LSTM'] = {
-        'forecast': lstm_forecast,
-        'metrics': lstm_metrics,
-        'true': true_values
-    }
+    # LSTM / Transformer — only if enough data
+    sufficient = len(train_series) >= _cfg.MIN_WINDOWS_DEEP_MODEL
 
-    transformer = TransformerPredictor(lookback=20, d_model=32, nhead=2, num_layers=1)
-    tf_forecast, tf_metrics = transformer.predict(train_series, forecast_horizon, epochs=epochs)
-    band_results['Transformer'] = {
-        'forecast': tf_forecast,
-        'metrics': tf_metrics,
-        'true': true_values
-    }
+    if sufficient:
+        try:
+            lstm = LSTMPredictor(lookback=30)
+            lstm_forecast, lstm_metrics = lstm.predict(
+                train_series, forecast_horizon, epochs=epochs
+            )
+            band_results["LSTM"] = {
+                "forecast": lstm_forecast, "metrics": lstm_metrics, "true": true_values,
+            }
+        except Exception as e:
+            band_results["LSTM"] = {
+                "forecast": np.zeros(forecast_horizon),
+                "metrics": {"RMSE": np.nan, "MAE": np.nan, "MSE": np.nan, "error": str(e)},
+                "true": true_values,
+            }
 
-    return {
-        'info': band_info,
-        'predictions': band_results
-    }
+        try:
+            transformer = TransformerPredictor(lookback=30)
+            tf_forecast, tf_metrics = transformer.predict(
+                train_series, forecast_horizon, epochs=epochs
+            )
+            band_results["Transformer"] = {
+                "forecast": tf_forecast, "metrics": tf_metrics, "true": true_values,
+            }
+        except Exception as e:
+            band_results["Transformer"] = {
+                "forecast": np.zeros(forecast_horizon),
+                "metrics": {"RMSE": np.nan, "MAE": np.nan, "MSE": np.nan, "error": str(e)},
+                "true": true_values,
+            }
+    else:
+        # Skip deep models — return NaN placeholders
+        skip_err = f"Series too short for deep models ({len(train_series)} < {_cfg.MIN_WINDOWS_DEEP_MODEL})"
+        band_results["LSTM"] = {
+            "forecast": np.zeros(forecast_horizon),
+            "metrics": {"RMSE": np.nan, "MAE": np.nan, "MSE": np.nan, "error": skip_err},
+            "true": true_values,
+        }
+        band_results["Transformer"] = {
+            "forecast": np.zeros(forecast_horizon),
+            "metrics": {"RMSE": np.nan, "MAE": np.nan, "MSE": np.nan, "error": skip_err},
+            "true": true_values,
+        }
+
+    return {"info": band_info, "predictions": band_results}
 
 
-def analyze_band_predictability(mel_spec, forecast_horizon=20, parallel=True, epochs=15):
+def analyze_band_predictability(mel_spec, forecast_horizon=20, parallel=False, epochs=None):
     """
-    Analyze predictability across different frequency bands with optimizations.
-    
-    Optimizations:
-    1. Downsample long sequences to reduce computation
-    2. Reduce epochs for deep models
-    3. Use smaller model architectures for faster training
-    4. Parallelize band processing using multiprocessing
+    Analyze predictability across different frequency bands.
+
+    Parameters
+    ----------
+    mel_spec : ndarray       Mel spectrogram (n_mels, n_frames).
+    forecast_horizon : int   Forecast steps.
+    parallel : bool          Use multiprocessing.  **Off by default** because
+                              multiprocessing + CUDA causes hangs on Windows.
+    epochs : int or None     Epochs for deep models.  Falls back to config default.
     """
+    if epochs is None:
+        epochs = _cfg.DEFAULT_BAND_EPOCHS
+
     n_mels = mel_spec.shape[0]
     third = n_mels // 3
 
     bands = {
-        'low': {'data': mel_spec[:third, :], 'name': 'Low Band', 'range': f'0-{third}'},
-        'mid': {'data': mel_spec[third:2 * third, :], 'name': 'Mid Band', 'range': f'{third}-{2 * third}'},
-        'high': {'data': mel_spec[2 * third:, :], 'name': 'High Band', 'range': f'{2 * third}-{n_mels}'}
+        "low":  {"data": mel_spec[:third, :],          "name": "Low Band",  "range": f"0-{third}"},
+        "mid":  {"data": mel_spec[third:2 * third, :], "name": "Mid Band",  "range": f"{third}-{2 * third}"},
+        "high": {"data": mel_spec[2 * third:, :],      "name": "High Band", "range": f"{2 * third}-{n_mels}"},
     }
 
     if parallel and len(bands) > 1:
         num_workers = min(len(bands), mp.cpu_count() - 1 or 1)
         print(f"  [Parallel] Using {num_workers} workers for band analysis...")
-        
+
         with mp.Pool(processes=num_workers) as pool:
-            analyze_func = partial(analyze_single_band, forecast_horizon=forecast_horizon, epochs=epochs)
-            
+            analyze_func = partial(
+                analyze_single_band, forecast_horizon=forecast_horizon, epochs=epochs
+            )
             band_items = list(bands.items())
-            band_data_list = [item[1]['data'] for item in band_items]
+            band_data_list = [item[1]["data"] for item in band_items]
             band_info_list = [item[1] for item in band_items]
-            
             results_list = pool.starmap(analyze_func, zip(band_data_list, band_info_list))
-            
             results = {}
             for i, (band_key, _) in enumerate(band_items):
                 results[band_key] = results_list[i]
@@ -103,9 +157,8 @@ def analyze_band_predictability(mel_spec, forecast_horizon=20, parallel=True, ep
         for band_key, band_info in bands.items():
             print(f"  Processing {band_info['name']}...")
             results[band_key] = analyze_single_band(
-                band_info['data'], band_info, 
-                forecast_horizon=forecast_horizon, 
-                epochs=epochs
+                band_info["data"], band_info,
+                forecast_horizon=forecast_horizon, epochs=epochs,
             )
 
     return results

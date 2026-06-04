@@ -277,6 +277,117 @@
             .theme-switcher::after { width: 20px; height: 20px; }
             [data-theme="light"] .theme-switcher::after { transform: translateX(22px); }
         }
+
+        /* Log Section */
+        .log-container {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 16px;
+        }
+        .log-content {
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            line-height: 1.6;
+            color: var(--text-secondary);
+            background: var(--bg-primary);
+            border-radius: 8px;
+            padding: 12px;
+        }
+        .log-entry {
+            padding: 4px 8px;
+            border-radius: 4px;
+            margin-bottom: 2px;
+        }
+        .log-entry:hover {
+            background: var(--accent-soft);
+        }
+        .log-error {
+            color: #ff4757;
+            background: rgba(255, 71, 87, 0.1);
+        }
+        .log-warning {
+            color: #ffa502;
+            background: rgba(255, 165, 2, 0.1);
+        }
+        .log-success {
+            color: #2ed573;
+            background: rgba(46, 213, 115, 0.1);
+        }
+        .log-info {
+            color: var(--text-secondary);
+        }
+        .log-download-btn {
+            margin-top: 12px;
+            padding: 10px 20px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .log-download-btn:hover {
+            background: var(--accent-light);
+            transform: translateY(-2px);
+        }
+
+        /* Navigation Links */
+        .nav-link {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.85rem;
+            padding: 6px 12px;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+            font-family: 'Outfit', sans-serif;
+        }
+        .nav-link:hover {
+            color: var(--accent);
+            background: var(--accent-soft);
+        }
+
+        /* Band Details */
+        .band-details {
+            margin-top: 12px;
+            border-top: 1px solid var(--border);
+            padding-top: 8px;
+        }
+        .band-details-summary {
+            cursor: pointer;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+        }
+        .band-details-summary:hover {
+            color: var(--accent);
+            background: var(--accent-soft);
+        }
+        .band-details-content {
+            margin-top: 8px;
+            padding: 8px;
+            background: var(--bg-primary);
+            border-radius: 6px;
+            font-size: 0.75rem;
+        }
+        .model-detail {
+            padding: 4px 0;
+            color: var(--text-secondary);
+        }
+        .error-text {
+            color: #ff4757;
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
@@ -290,7 +401,16 @@
             <span class="nav-brand"><i class="fas fa-chart-line"></i> ANALYSIS RESULTS</span>
             <span class="nav-task-id">TASK {{ task_id }}</span>
         </div>
-        <a href="{{ url_for('index') }}" class="nav-btn"><i class="fas fa-arrow-left"></i> NEW ANALYSIS</a>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+            <a href="#sec-ts" class="nav-link">Time Series</a>
+            <a href="#sec-viz" class="nav-link">Visualizations</a>
+            <a href="#sec-pred" class="nav-link">Predictions</a>
+            <a href="#sec-band" class="nav-link">Bands</a>
+            {% if results.get('dynamics') %}<a href="#sec-dynamics" class="nav-link">Dynamics</a>{% endif %}
+            {% if results.get('volatility') %}<a href="#sec-volatility" class="nav-link">Volatility</a>{% endif %}
+            <a href="#sec-log" class="nav-link">Log</a>
+            <a href="{{ url_for('index') }}" class="nav-btn"><i class="fas fa-arrow-left"></i> NEW</a>
+        </div>
     </nav>
 
     <!-- Main -->
@@ -369,6 +489,13 @@
                 </div>
                 {% endif %}
 
+                {% if plot_urls.get('stft_spectrogram') %}
+                <div class="plot-box" style="grid-column: 1 / -1;">
+                    <div class="plot-caption"><i class="fas fa-th"></i> STFT Spectrogram</div>
+                    <img src="{{ plot_urls.stft_spectrogram }}" alt="STFT Spectrogram" loading="lazy">
+                </div>
+                {% endif %}
+
                 {% if plot_urls.get('mel_spectrogram') %}
                 <div class="plot-box" style="grid-column: 1 / -1;">
                     <div class="plot-caption"><i class="fas fa-th"></i> Mel Spectrogram</div>
@@ -380,6 +507,13 @@
                 <div class="plot-box">
                     <div class="plot-caption"><i class="fas fa-chart-line"></i> ACF / PACF</div>
                     <img src="{{ plot_urls.acf_pacf }}" alt="ACF PACF" loading="lazy">
+                </div>
+                {% endif %}
+
+                {% if plot_urls.get('periodicity') %}
+                <div class="plot-box">
+                    <div class="plot-caption"><i class="fas fa-wave-square"></i> Periodicity Analysis</div>
+                    <img src="{{ plot_urls.periodicity }}" alt="Periodicity" loading="lazy">
                 </div>
                 {% endif %}
             </div>
@@ -434,10 +568,29 @@
                 <div class="band-card">
                     <div class="band-head">
                         <span class="band-name">{{ data['name'] }}</span>
-                        <span class="band-badge">RMSE: {{ data['avg_rmse']|float|round(4) }}</span>
+                        <span class="band-badge">RMSE: {{ 'N/A' if data['avg_rmse'] != data['avg_rmse'] else data['avg_rmse']|float|round(4) }}</span>
                     </div>
                     <div class="band-row"><span class="band-k">Best Model:</span><span class="band-v">{{ data['best_model'] or 'N/A' }}</span></div>
-                    <div class="band-row"><span class="band-k">Average MAE:</span><span class="band-v">{{ data['avg_mae']|float|round(4) }}</span></div>
+                    <div class="band-row"><span class="band-k">Average MAE:</span><span class="band-v">{{ 'N/A' if data['avg_mae'] != data['avg_mae'] else data['avg_mae']|float|round(4) }}</span></div>
+                    
+                    {% if results.get('band_results') and results['band_results'].get(band) %}
+                    <details class="band-details">
+                        <summary class="band-details-summary">View Details</summary>
+                        <div class="band-details-content">
+                            {% for model_name, model_data in results['band_results'][band]['predictions'].items() %}
+                            <div class="model-detail">
+                                <strong>{{ model_name }}</strong>:
+                                {% if model_data['metrics'].get('error') %}
+                                <span class="error-text">Error: {{ model_data['metrics']['error'][:80] }}...</span>
+                                {% else %}
+                                RMSE: {{ 'N/A' if model_data['metrics'].get('RMSE') != model_data['metrics'].get('RMSE') else model_data['metrics']['RMSE']|float|round(4) }},
+                                MAE: {{ 'N/A' if model_data['metrics'].get('MAE') != model_data['metrics'].get('MAE') else model_data['metrics']['MAE']|float|round(4) }}
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </details>
+                    {% endif %}
                 </div>
                 {% endfor %}
             </div>
@@ -452,13 +605,219 @@
                     <span class="rank-n">{{ loop.index }}</span>
                     <div class="rank-info">
                         <div class="rank-band-name">{{ item['band'] }}</div>
-                        <div class="rank-detail">Best Model: {{ item['best_model'] }}</div>
+                        <div class="rank-detail">Best Model: {{ item['best_model'] or 'N/A' }}</div>
                     </div>
-                    <span class="rank-rmse">{{ item['avg_rmse']|float|round(4) }}</span>
+                    <span class="rank-rmse">{{ 'N/A' if item['avg_rmse'] != item['avg_rmse'] else item['avg_rmse']|float|round(4) }}</span>
                 </li>
                 {% endfor %}
             </ol>
             {% endif %}
+        </div>
+
+        <!-- Dynamics Analysis -->
+        {% if results.get('dynamics') %}
+        <div class="section" id="sec-dynamics">
+            <h2 class="sec-title"><i class="fas fa-wave-square"></i> AUDIO DYNAMICS ANALYSIS</h2>
+            
+            {% if plot_urls.get('dynamics/trends') %}
+            <div class="plot-box" style="margin-bottom: 24px;">
+                <div class="plot-caption"><i class="fas fa-line-chart"></i> Trend Dynamics</div>
+                <img src="{{ plot_urls['dynamics/trends'] }}" alt="Dynamics Trends" loading="lazy">
+            </div>
+            {% endif %}
+
+            {% if plot_urls.get('dynamics/summary') %}
+            <div class="plot-box" style="margin-bottom: 24px;">
+                <div class="plot-caption"><i class="fas fa-pie-chart"></i> Dynamics Summary</div>
+                <img src="{{ plot_urls['dynamics/summary'] }}" alt="Dynamics Summary" loading="lazy">
+            </div>
+            {% endif %}
+
+            {% if results.get('dynamics_summary') %}
+            <div class="data-grid">
+                {% for trend_key in ['energy', 'brightness', 'complexity', 'rhythm'] %}
+                {% if results['dynamics_summary'].get(trend_key) %}
+                <div class="data-cell">
+                    <div class="data-key">{{ trend_key|capitalize }} Trend</div>
+                    <div class="data-val">{{ results['dynamics_summary'][trend_key].get('trend_direction', 'N/A')|upper }}</div>
+                </div>
+                <div class="data-cell">
+                    <div class="data-key">{{ trend_key|capitalize }} Mean</div>
+                    <div class="data-val">{{ results['dynamics_summary'][trend_key].get('mean', 0)|float|round(4) }}</div>
+                </div>
+                <div class="data-cell">
+                    <div class="data-key">{{ trend_key|capitalize }} Std</div>
+                    <div class="data-val">{{ results['dynamics_summary'][trend_key].get('std', 0)|float|round(4) }}</div>
+                </div>
+                <div class="data-cell">
+                    <div class="data-key">{{ trend_key|capitalize }} Peaks</div>
+                    <div class="data-val">{{ results['dynamics_summary'][trend_key].get('n_peaks', 0) }}</div>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Volatility Analysis -->
+        {% if results.get('volatility') %}
+        <div class="section" id="sec-volatility">
+            <h2 class="sec-title"><i class="fas fa-chart-line"></i> VOLATILITY ANALYSIS</h2>
+            
+            {% if plot_urls.get('volatility/volatility_layer') %}
+            <div class="plot-box" style="margin-bottom: 24px;">
+                <div class="plot-caption"><i class="fas fa-layer-group"></i> Volatility Layer</div>
+                <img src="{{ plot_urls['volatility/volatility_layer'] }}" alt="Volatility Layer" loading="lazy">
+            </div>
+            {% endif %}
+
+            {% if plot_urls.get('volatility/garch_energy') %}
+            <div class="plot-box" style="margin-bottom: 24px;">
+                <div class="plot-caption"><i class="fas fa-cogs"></i> GARCH Diagnostics</div>
+                <img src="{{ plot_urls['volatility/garch_energy'] }}" alt="GARCH Diagnostics" loading="lazy">
+            </div>
+            {% endif %}
+
+            {% if plot_urls.get('volatility/dynamics_analysis_summary') %}
+            <div class="plot-box" style="margin-bottom: 24px;">
+                <div class="plot-caption"><i class="fas fa-tachometer-alt"></i> Analysis Summary</div>
+                <img src="{{ plot_urls['volatility/dynamics_analysis_summary'] }}" alt="Dynamics Analysis Summary" loading="lazy">
+            </div>
+            {% endif %}
+
+            {% if plot_urls.get('volatility/volatility_comparison') %}
+            <div class="plot-box" style="margin-bottom: 24px;">
+                <div class="plot-caption"><i class="fas fa-balance-scale"></i> Volatility Comparison</div>
+                <img src="{{ plot_urls['volatility/volatility_comparison'] }}" alt="Volatility Comparison" loading="lazy">
+            </div>
+            {% endif %}
+
+            {% if results.get('volatility_summary') %}
+            <div class="data-grid">
+                {% for trend_key in ['energy', 'brightness', 'complexity', 'rhythm'] %}
+                {% if results['volatility_summary'].get(trend_key) %}
+                <div class="data-cell">
+                    <div class="data-key">{{ trend_key|capitalize }} Volatility</div>
+                    <div class="data-val">{{ results['volatility_summary'][trend_key].get('mean_vol', 0)|float|round(5) }}</div>
+                </div>
+                <div class="data-cell">
+                    <div class="data-key">{{ trend_key|capitalize }} Regime</div>
+                    <div class="data-val">{{ results['volatility_summary'][trend_key].get('volatility_regime', 'N/A') }}</div>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Discovery Analysis -->
+        {% if results.get('discovery') %}
+        <div class="section" id="sec-discovery">
+            <h2 class="sec-title"><i class="fas fa-search"></i> AUDIO DISCOVERY</h2>
+            
+            <div class="data-grid">
+                {% if results['discovery'].get('title') %}
+                <div class="data-cell">
+                    <div class="data-key">Discovery Type</div>
+                    <div class="data-val">{{ results['discovery']['title'] }}</div>
+                </div>
+                {% endif %}
+                {% if results['discovery'].get('summary') %}
+                <div class="data-cell">
+                    <div class="data-key">Summary</div>
+                    <div class="data-val">{{ results['discovery']['summary'][:100] }}...</div>
+                </div>
+                {% endif %}
+                {% if results['discovery'].get('n_matches') %}
+                <div class="data-cell">
+                    <div class="data-key">Matches Found</div>
+                    <div class="data-val">{{ results['discovery']['n_matches'] }}</div>
+                </div>
+                {% endif %}
+                {% if results['discovery'].get('avg_confidence') %}
+                <div class="data-cell">
+                    <div class="data-key">Avg Confidence</div>
+                    <div class="data-val">{{ results['discovery']['avg_confidence']|float|round(2) }}</div>
+                </div>
+                {% endif %}
+            </div>
+
+            {% for plot_key in plot_urls %}
+            {% if 'discovery/' in plot_key %}
+            <div class="plot-box" style="margin-bottom: 24px;">
+                <div class="plot-caption"><i class="fas fa-image"></i> {{ plot_key.split('/')[-1] }}</div>
+                <img src="{{ plot_urls[plot_key] }}" alt="{{ plot_key }}" loading="lazy">
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Model Analysis -->
+        {% if results.get('model_analysis') %}
+        <div class="section" id="sec-models">
+            <h2 class="sec-title"><i class="fas fa-brain"></i> MODEL STRUCTURE ANALYSIS</h2>
+            
+            <div class="data-grid">
+                {% if results['model_analysis'].get('ensemble_summary') %}
+                <div class="data-cell" style="grid-column: 1 / -1;">
+                    <div class="data-key">Ensemble Summary</div>
+                    <div class="data-val">{{ results['model_analysis']['ensemble_summary'] }}</div>
+                </div>
+                {% endif %}
+
+                {% if results['model_analysis'].get('arima_summary') %}
+                <div class="data-cell">
+                    <div class="data-key">ARIMA Summary</div>
+                    <div class="data-val">{{ results['model_analysis']['arima_summary'][:150] }}...</div>
+                </div>
+                {% endif %}
+
+                {% if results['model_analysis'].get('hmm_summary') %}
+                <div class="data-cell">
+                    <div class="data-key">HMM Summary</div>
+                    <div class="data-val">{{ results['model_analysis']['hmm_summary'][:150] }}...</div>
+                </div>
+                {% endif %}
+
+                {% if results['model_analysis'].get('lstm_summary') %}
+                <div class="data-cell">
+                    <div class="data-key">LSTM Summary</div>
+                    <div class="data-val">{{ results['model_analysis']['lstm_summary'][:150] }}...</div>
+                </div>
+                {% endif %}
+
+                {% if results['model_analysis'].get('transformer_summary') %}
+                <div class="data-cell">
+                    <div class="data-key">Transformer Summary</div>
+                    <div class="data-val">{{ results['model_analysis']['transformer_summary'][:150] }}...</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Analysis Log -->
+        <div class="section" id="sec-log">
+            <h2 class="sec-title"><i class="fas fa-terminal"></i> ANALYSIS LOG</h2>
+            <div class="log-container">
+                <div class="log-content" id="logContent">
+                    {% if results.get('analysis_log') %}
+                    {% for log_entry in results['analysis_log'] %}
+                    <div class="log-entry {% if 'error' in log_entry|lower or 'failed' in log_entry|lower %}log-error{% elif 'warning' in log_entry|lower %}log-warning{% elif 'complete' in log_entry|lower or 'done' in log_entry|lower %}log-success{% endif %}">
+                        {{ log_entry }}
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <div class="log-entry log-info">Analysis completed. No detailed log available.</div>
+                    {% endif %}
+                </div>
+                <button class="log-download-btn" onclick="downloadLog()">
+                    <i class="fas fa-download"></i> Download Log
+                </button>
+            </div>
         </div>
 
     </div>
@@ -494,6 +853,30 @@
             el.style.transition = `all 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275)`;
             obs.observe(el);
         });
+
+        // ---- Download Log ----
+        function downloadLog() {
+            const logContent = document.getElementById('logContent');
+            const entries = logContent.querySelectorAll('.log-entry');
+            let logText = '=== Audio Lab Analysis Log ===\n';
+            logText += 'Generated: ' + new Date().toISOString() + '\n';
+            logText += 'Task ID: {{ task_id }}\n';
+            logText += '================================\n\n';
+            
+            entries.forEach(entry => {
+                logText += entry.textContent.trim() + '\n';
+            });
+
+            const blob = new Blob([logText], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'analysis_log_{{ task_id }}.txt';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
     </script>
 </body>
 </html>

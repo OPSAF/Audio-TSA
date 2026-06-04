@@ -141,59 +141,59 @@ def _as_float64(y):
 def _describe_rhythm(onset_density: float, n_peaks: int, duration: float) -> str:
     bpm_est = n_peaks / max(duration, 0.1) * 60
     if onset_density > 0.03:
-        density = "高节奏密度"
+        density = "high rhythm density"
     elif onset_density > 0.015:
-        density = "中等节奏密度"
+        density = "medium rhythm density"
     else:
-        density = "稀疏、持续音为主"
+        density = "sparse, sustained tones dominant"
 
     if bpm_est > 160:
-        tempo = "快速"
+        tempo = "fast"
     elif bpm_est > 100:
-        tempo = "中速"
+        tempo = "moderate"
     elif bpm_est > 50:
-        tempo = "慢速"
+        tempo = "slow"
     else:
-        tempo = "非常缓慢"
+        tempo = "very slow"
 
-    return f"{tempo}，{density}（~{bpm_est:.0f} peaks/min）"
+    return f"{tempo}, {density} (~{bpm_est:.0f} peaks/min)"
 
 
 def _describe_energy(energy: np.ndarray, times: np.ndarray) -> str:
     n = len(energy)
     if n < 3:
-        return "能量稳定"
+        return "stable energy"
     x = np.arange(n)
     slope, _, _, _, _ = stats.linregress(x, energy)
     peak_idx = int(np.argmax(energy))
     peak_time = times[peak_idx]
 
     if slope > energy.std() * 0.3 / n:
-        trend = "能量整体上升"
+        trend = "rising energy"
     elif slope < -energy.std() * 0.3 / n:
-        trend = "能量整体下降"
+        trend = "falling energy"
     else:
-        trend = "能量整体平稳"
+        trend = "stable energy"
 
-    return f"{trend}，峰值在 {peak_time:.1f}s"
+    return f"{trend}, peak at {peak_time:.1f}s"
 
 
 def _describe_timbre(centroid_mean: float, flatness: float) -> str:
     if centroid_mean > 3000:
-        bright = "明亮"
+        bright = "bright"
     elif centroid_mean > 1500:
-        bright = "中等亮度"
+        bright = "medium brightness"
     else:
-        bright = "偏暗/温暖"
+        bright = "dark/warm"
 
     if flatness > 0.7:
-        noise = "，噪声成分多"
+        noise = ", noisy"
     elif flatness > 0.4:
-        noise = "，混合音色"
+        noise = ", mixed timbre"
     else:
-        noise = "，音调纯净"
+        noise = ", pure tone"
 
-    return bright + noise + f"（质心 {centroid_mean:.0f} Hz）"
+    return f"{bright}{noise} (centroid {centroid_mean:.0f} Hz)"
 
 
 def _find_peaks_with_prominence(arr: np.ndarray, distance: int = 3,
@@ -356,14 +356,15 @@ def cross_discover(
     """
     discoveries: List[Discovery] = []
 
-    dimensions = [
-        ("energy", "能量趋势", "Energy Trend"),
-        ("brightness", "亮度趋势", "Brightness Trend"),
-        ("complexity", "复杂度趋势", "Complexity Trend"),
-        ("rhythm", "节奏密度", "Rhythm Density"),
-    ]
+    # Dimension name mapping: key → (English, English)
+    _DIM_NAMES = {
+        "energy":      ("Energy Trend", "Energy Trend"),
+        "brightness":  ("Brightness Trend", "Brightness Trend"),
+        "complexity":  ("Complexity Trend", "Complexity Trend"),
+        "rhythm":      ("Rhythm Density", "Rhythm Density"),
+    }
 
-    for dim_key, dim_name_cn, dim_name_en in dimensions:
+    for dim_key, (dim_name_cn, dim_name_en) in _DIM_NAMES.items():
         a = dyn1[dim_key]
         b = dyn2[dim_key]
         times_a = dyn1["times"]
@@ -395,7 +396,7 @@ def cross_discover(
                 ))
 
             discovery = Discovery(
-                title=f"{dim_name_cn} ({dim_name_en})",
+                title=f"{dim_name_cn}",
                 dimension=dim_key,
                 discovery_type="segment_correspondence",
                 summary=_compose_dimension_summary(dim_key, dim_name_cn, matches),
@@ -410,15 +411,16 @@ def cross_discover(
         else:
             # Report no match as a finding too
             discoveries.append(Discovery(
-                title=f"{dim_name_cn} ({dim_name_en})",
+                title=f"{dim_name_cn}",
                 dimension=dim_key,
                 discovery_type="segment_correspondence",
-                summary=f"在{dim_name_cn}维度上未发现显著对应的段落。两段音频在该维度表现不同。",
+                summary=f"No significant corresponding segments found in {dim_name_en} dimension. "
+                        f"The two audios differ in this dimension.",
                 segment_matches=[],
                 evidence=[Evidence(
                     method="segment_search",
                     confidence=0.0,
-                    detail="未找到 confidence > 0.6 的匹配段落",
+                    detail="No matches with confidence > 0.6 found",
                 )],
                 meta={"n_matches": 0, "avg_confidence": 0.0},
             ))
@@ -496,18 +498,18 @@ def _find_corresponding_segments(
                 evidence_method = "derivative_correlation"
                 if best_corr > 0.85:
                     evidence_detail = (
-                        f"形状高度匹配（导函数相关 r={best_corr:.3f}），"
-                        f"原始值相关 r={raw_r:.3f}"
+                        f"High shape match (derivative corr r={best_corr:.3f}), "
+                        f"raw value corr r={raw_r:.3f}"
                     )
                 elif best_corr > 0.7:
                     evidence_detail = (
-                        f"形状较为匹配（导函数相关 r={best_corr:.3f}），"
-                        f"原始值相关 r={raw_r:.3f}"
+                        f"Moderate shape match (derivative corr r={best_corr:.3f}), "
+                        f"raw value corr r={raw_r:.3f}"
                     )
                 else:
                     evidence_detail = (
-                        f"存在弱对应关系（导函数相关 r={best_corr:.3f}），"
-                        f"可能为偶然匹配"
+                        f"Weak correspondence (derivative corr r={best_corr:.3f}), "
+                        f"possible accidental match"
                     )
 
                 matches.append({
@@ -547,7 +549,7 @@ def _compose_dimension_summary(dim_key: str, dim_name: str,
                                 matches: List[Dict]) -> str:
     """Compose a natural language summary for a dimension's findings."""
     if not matches:
-        return f"在{dim_name}维度上未发现显著对应的段落。"
+        return f"No significant corresponding segments found in {dim_name} dimension."
 
     n = len(matches)
     confs = [m["confidence"] for m in matches]
@@ -558,27 +560,27 @@ def _compose_dimension_summary(dim_key: str, dim_name: str,
     time_ranges_b = [(m["time_b_start"], m["time_b_end"]) for m in matches]
 
     if avg_conf > 0.8:
-        quality = "高度对应"
+        quality = "high correspondence"
     elif avg_conf > 0.65:
-        quality = "较为对应"
+        quality = "moderate correspondence"
     else:
-        quality = "存在弱对应"
+        quality = "weak correspondence"
 
     return (
-        f"在{dim_name}维度发现 {n} 处{quality}的段落。"
-        f"平均置信度 {avg_conf:.2f}，最高 {max_conf:.2f}。"
-        f"Audio A 匹配段: {_format_time_ranges(time_ranges_a)}；"
-        f"Audio B 匹配段: {_format_time_ranges(time_ranges_b)}。"
+        f"Found {n} {quality} segments in {dim_name} dimension. "
+        f"Avg confidence {avg_conf:.2f}, max {max_conf:.2f}. "
+        f"Audio A segments: {_format_time_ranges(time_ranges_a)}; "
+        f"Audio B segments: {_format_time_ranges(time_ranges_b)}."
     )
 
 
 def _format_time_ranges(ranges: List[Tuple[float, float]]) -> str:
     if not ranges:
-        return "无"
-    parts = [f"{s:.1f}s–{e:.1f}s" for s, e in ranges[:3]]
+        return "none"
+    parts = [f"{s:.1f}s-{e:.1f}s" for s, e in ranges[:3]]
     if len(ranges) > 3:
-        parts.append(f"等{len(ranges)}段")
-    return "，".join(parts)
+        parts.append(f"+{len(ranges)-3} more")
+    return ", ".join(parts)
 
 
 # ---------------------------------------------------------------------------
@@ -593,14 +595,14 @@ def analyze_contrast(dyn1: Dict, dyn2: Dict) -> List[Discovery]:
     """
     contrasts: List[Discovery] = []
 
-    dimensions = [
-        ("energy", "能量", "Energy"),
-        ("brightness", "亮度", "Brightness"),
-        ("complexity", "复杂度", "Complexity"),
-        ("rhythm", "节奏密度", "Rhythm"),
-    ]
+    _CONTRAST_DIM_NAMES = {
+        "energy":      ("Energy", "Energy"),
+        "brightness":  ("Brightness", "Brightness"),
+        "complexity":  ("Complexity", "Complexity"),
+        "rhythm":      ("Rhythm", "Rhythm"),
+    }
 
-    for dim_key, dim_name_cn, dim_name_en in dimensions:
+    for dim_key, (dim_name_cn, dim_name_en) in _CONTRAST_DIM_NAMES.items():
         a = dyn1[dim_key]
         b = dyn2[dim_key]
 
@@ -623,23 +625,23 @@ def analyze_contrast(dyn1: Dict, dyn2: Dict) -> List[Discovery]:
         # Compose finding
         if diff_ratio > 1.0:
             if mean_a > mean_b:
-                direction = f"Audio A 的{dim_name_cn}显著高于 Audio B"
-                ratio_str = f"A 是 B 的 {mean_a/(mean_b+1e-12):.1f} 倍"
+                direction = f"Audio A => {dim_name_cn}({dim_name_en}) significantly higher than Audio B"
+                ratio_str = f"A is {mean_a/(mean_b+1e-12):.1f}x of B"
             else:
-                direction = f"Audio B 的{dim_name_cn}显著高于 Audio A"
-                ratio_str = f"B 是 A 的 {mean_b/(mean_a+1e-12):.1f} 倍"
+                direction = f"Audio B => {dim_name_cn}({dim_name_en}) significantly higher than Audio A"
+                ratio_str = f"B is {mean_b/(mean_a+1e-12):.1f}x of A"
 
             contrasts.append(Discovery(
-                title=f"{dim_name_cn}对比 ({dim_name_en} Contrast)",
+                title=f"{dim_name_cn} Contrast",
                 dimension=dim_key,
                 discovery_type="contrast",
-                summary=f"{direction}。{ratio_str}。分布重叠度仅 {overlap:.1%}。",
+                summary=f"{direction}. {ratio_str}. Distribution overlap only {overlap:.1%}.",
                 evidence=[Evidence(
                     method="distribution_comparison",
                     confidence=float(np.clip(diff_ratio / 3.0, 0.0, 1.0)),
                     detail=f"A: mean={mean_a:.4f} std={std_a:.4f} | "
                            f"B: mean={mean_b:.4f} std={std_b:.4f} | "
-                           f"标准化差异比: {diff_ratio:.2f}",
+                           f"normalized diff ratio: {diff_ratio:.2f}",
                 )],
                 meta={
                     "mean_a": mean_a, "mean_b": mean_b,
@@ -649,16 +651,16 @@ def analyze_contrast(dyn1: Dict, dyn2: Dict) -> List[Discovery]:
             ))
         else:
             contrasts.append(Discovery(
-                title=f"{dim_name_cn}对比 ({dim_name_en} Contrast)",
+                title=f"{dim_name_cn} Contrast",
                 dimension=dim_key,
                 discovery_type="contrast",
-                summary=f"两段音频在{dim_name_cn}维度上表现相近"
-                        f"（标准化差异 {diff_ratio:.2f}，分布重叠 {overlap:.1%}）。",
+                summary=f"Both audios similar in {dim_name_en} dimension "
+                        f"(normalized diff {diff_ratio:.2f}, distribution overlap {overlap:.1%}).",
                 evidence=[Evidence(
                     method="distribution_comparison",
                     confidence=float(1.0 - np.clip(diff_ratio / 2.0, 0.0, 1.0)),
                     detail=f"A: mean={mean_a:.4f} | B: mean={mean_b:.4f} | "
-                           f"差异较小",
+                           f"small difference",
                 )],
                 meta={
                     "mean_a": mean_a, "mean_b": mean_b,
@@ -683,27 +685,27 @@ def compose_overview(
     """Compose a natural-language overview paragraph from discoveries."""
     parts = []
 
-    parts.append(f"Audio A（{duration_a:.1f}s）与 Audio B（{duration_b:.1f}s）")
+    parts.append(f"Audio A ({duration_a:.1f}s) vs Audio B ({duration_b:.1f}s)")
 
     # Summarise discoveries
     n_matches_total = sum(d.meta.get("n_matches", 0) for d in discoveries)
     high_conf_dims = [
-        d.title for d in discoveries
+        d.dimension for d in discoveries
         if d.meta.get("avg_confidence", 0) > 0.7 and d.meta.get("n_matches", 0) > 0
     ]
 
     if high_conf_dims:
         parts.append(
-            f"在 {', '.join(high_conf_dims)} 维度上发现了较为对应的段落"
-            f"（共 {n_matches_total} 处匹配）。"
+            f"Found corresponding segments in {', '.join(high_conf_dims)} dimensions "
+            f"(total {n_matches_total} matches)."
         )
     elif n_matches_total > 0:
         parts.append(
-            f"共发现 {n_matches_total} 处可能的对应段落，但置信度普遍不高，"
-            f"两段音频的结构关联性较弱。"
+            f"Found {n_matches_total} possible corresponding segments, but confidence is generally low. "
+            f"Weak structural correlation between the two audios."
         )
     else:
-        parts.append("未发现显著的段落对应关系。")
+        parts.append("No significant segment correspondences found.")
 
     # Summarise contrasts
     strong_contrasts = [
@@ -712,7 +714,7 @@ def compose_overview(
     ]
     if strong_contrasts:
         dims = [c.dimension for c in strong_contrasts]
-        parts.append(f"两段音频在 {', '.join(dims)} 上存在明显差异。")
+        parts.append(f"Significant differences in {', '.join(dims)} dimensions.")
 
     similar_dims = [
         c for c in contrasts
@@ -720,11 +722,11 @@ def compose_overview(
     ]
     if similar_dims:
         dims = [c.dimension for c in similar_dims]
-        parts.append(f"在 {', '.join(dims)} 上表现相近。")
+        parts.append(f"Similar performance in {', '.join(dims)} dimensions.")
 
     parts.append(
-        "以上发现仅供参考——音频相似性本质上是主观的，"
-        "这些多维度证据帮助你自行判断两段音频之间的关系。"
+        "Note: These findings are for reference only - audio similarity is inherently subjective. "
+        "This multi-dimensional evidence helps you judge the relationship between the two audios."
     )
 
     return "".join(parts)
@@ -847,10 +849,10 @@ def explore(
     else:
         # Single audio: just self-discovery
         report.overview = (
-            f"对 Audio A（{self_a['duration']:.1f}s）进行了结构探索，"
-            f"发现了 {len(self_a['segments']['climax'])} 处高潮段、"
-            f"{len(self_a['segments']['calm'])} 处平静段、"
-            f"{len(self_a['motifs'])} 处重复 motif。"
+            f"Structural exploration of Audio A ({self_a['duration']:.1f}s) completed. "
+            f"Found {len(self_a['segments']['climax'])} climax segments, "
+            f"{len(self_a['segments']['calm'])} calm segments, "
+            f"{len(self_a['motifs'])} repeated motifs."
         )
 
     if verbose:

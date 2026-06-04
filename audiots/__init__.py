@@ -37,10 +37,13 @@ from . import visualization
 from . import similarity
 from . import similarity_viz
 from . import discovery_viz
+from . import config
+from . import prediction_cache
 
 __all__ = [
-    'loader', 'features', 'dynamics', 'volatility', 'model_analysis',
-    'discovery', 'unsupervised',
-    'analysis', 'prediction', 'band_analysis', 'visualization',
-    'similarity', 'similarity_viz', 'discovery_viz',
+    "loader", "features", "dynamics", "volatility", "model_analysis",
+    "discovery", "unsupervised",
+    "analysis", "prediction", "band_analysis", "visualization",
+    "similarity", "similarity_viz", "discovery_viz",
+    "config", "prediction_cache",
 ]

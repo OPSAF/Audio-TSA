@@ -66,6 +66,8 @@ warnings.filterwarnings("ignore", category=RuntimeWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
 
+from . import config as _cfg
+
 
 # ---------------------------------------------------------------------------
 # Data structures
@@ -419,6 +421,9 @@ def analyze_hmm_insights(dynamics: Dict, n_states: int = 3,
         )
 
     actual_states = min(n_states, max(2, n // 6))
+    # Further validation: at least ~8 observations per state for stability
+    max_reasonable = max(2, n // 8)
+    actual_states = min(actual_states, max_reasonable)
 
     # Fit with multiple restarts
     best_model = None
@@ -429,12 +434,21 @@ def analyze_hmm_insights(dynamics: Dict, n_states: int = 3,
                 warnings.simplefilter("ignore")
                 model = hmm.GaussianHMM(
                     n_components=actual_states,
-                    covariance_type="full",
-                    n_iter=200,
-                    tol=1e-4,
+                    covariance_type=_cfg.DEFAULT_HMM_COVARIANCE,
+                    n_iter=_cfg.HMM_N_ITER,
+                    tol=_cfg.HMM_TOL,
                     random_state=random_state + _,
                 )
-                model.fit(feats)
+                # Suppress hmmlearn convergence print noise
+                import os as _os
+                from io import StringIO
+                import sys as _sys
+                _old_stdout = _sys.stdout
+                _sys.stdout = StringIO()
+                try:
+                    model.fit(feats)
+                finally:
+                    _sys.stdout = _old_stdout
                 score = model.score(feats)
                 if score > best_score:
                     best_score = score
@@ -554,7 +568,7 @@ def analyze_hmm_insights(dynamics: Dict, n_states: int = 3,
 
 def analyze_lstm_insights(
     dynamics: Dict,
-    lookbacks: Tuple[int, ...] = (5, 10, 20, 30),
+    lookbacks: Tuple[int, ...] = (10, 20, 30),
     forecast_horizon: int = 10,
     epochs: int = 20,
     verbose: bool = False,

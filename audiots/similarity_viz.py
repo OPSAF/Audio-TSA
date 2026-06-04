@@ -17,6 +17,23 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle, FancyBboxPatch
 from matplotlib.colors import LinearSegmentedColormap
 
+# Set font to ensure no encoding issues - try multiple fonts
+import matplotlib.font_manager as fm
+# Try to find available fonts
+available_fonts = [f.name for f in fm.fontManager.ttflist]
+# Preferred fonts in order of preference
+font_candidates = ['DejaVu Sans', 'Arial', 'Helvetica', 'Tahoma', 'Verdana', 'Calibri', 'Segoe UI', 'Microsoft YaHei', 'SimHei']
+selected_font = 'DejaVu Sans'
+for font in font_candidates:
+    if font in available_fonts:
+        selected_font = font
+        break
+plt.rcParams['font.family'] = selected_font
+plt.rcParams['axes.unicode_minus'] = False
+# Additional settings to prevent encoding issues
+plt.rcParams['font.size'] = 10
+plt.rcParams['figure.dpi'] = 100
+
 
 # ---------------------------------------------------------------------------
 # Custom colour maps
@@ -65,8 +82,8 @@ def plot_similarity_matrix(
         ax.scatter(ann_times_b, ann_times_a, c="lime", edgecolors="black",
                    s=40, zorder=5, marker="o", alpha=0.9, label="Top matches")
 
-    ax.set_xlabel("Audio 2 — Time (s)", fontsize=12)
-    ax.set_ylabel("Audio 1 — Time (s)", fontsize=12)
+    ax.set_xlabel("Audio 2 - Time (s)", fontsize=12)
+    ax.set_ylabel("Audio 1 - Time (s)", fontsize=12)
     ax.set_title(title, fontsize=14)
 
     if aggregation:
@@ -121,13 +138,13 @@ def plot_similar_segments(
 
     # Waveform 1
     ax1.plot(t1_ds, y1_ds, color="#1f77b4", linewidth=0.6, alpha=0.9)
-    ax1.set_ylabel("Audio 1 — Amplitude", fontsize=11)
+    ax1.set_ylabel("Audio 1 - Amplitude", fontsize=11)
     ax1.set_xlim(0, t1_ds[-1])
 
     # Waveform 2
     ax2.plot(t2_ds, y2_ds, color="#ff7f0e", linewidth=0.6, alpha=0.9)
     ax2.set_xlabel("Time (s)", fontsize=11)
-    ax2.set_ylabel("Audio 2 — Amplitude", fontsize=11)
+    ax2.set_ylabel("Audio 2 - Amplitude", fontsize=11)
     ax2.set_xlim(0, t2_ds[-1])
 
     # Colour for each annotation based on similarity
@@ -231,7 +248,7 @@ def plot_pattern_annotations(
     novelty curve, and onset density.
     """
     if title is None:
-        title = f"{audio_label} — Hidden Pattern Annotations"
+        title = f"{audio_label} - Hidden Pattern Annotations"
 
     max_display = 60000
     ds_factor = max(1, len(y) // max_display)
@@ -292,7 +309,7 @@ def plot_pattern_annotations(
 def plot_similarity_summary(
     results: Dict,
     save_path: Optional[str] = None,
-    title: str = "Audio Similarity Analysis — Summary Dashboard",
+    title: str = "Audio Similarity Analysis - Summary Dashboard",
 ) -> plt.Figure:
     """
     Single‑figure dashboard combining:
