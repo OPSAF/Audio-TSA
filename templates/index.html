@@ -1194,6 +1194,16 @@
             <div class="upload-card">
                 <form method="POST" enctype="multipart/form-data" id="analysisForm">
 
+                    <!-- 实验命名 -->
+                    <div class="form-group">
+                        <label class="form-label">
+                            <i class="fas fa-tag"></i> 实验名称（可选）
+                        </label>
+                        <input type="text" class="input-field" id="experiment_name"
+                               name="experiment_name" placeholder="为本次分析命名，便于历史记录查找...">
+                        <span class="input-hint">不填写则使用默认名称</span>
+                    </div>
+
                     <!-- 主音频文件 -->
                     <div class="form-group">
                         <label class="form-label">
@@ -1345,26 +1355,107 @@
                 <h2><i class="fas fa-history"></i> 历史分析报告</h2>
                 <button type="button" class="history-modal-close" onclick="closeHistoryModal()"><i class="fas fa-times"></i></button>
             </div>
+            <div style="display:flex;gap:8px;padding:0 32px;border-bottom:1px solid var(--border);">
+                <button class="history-tab active" onclick="switchHistoryTab('reports')" id="tabReports">报告历史</button>
+                <button class="history-tab" onclick="switchHistoryTab('experiments')" id="tabExperiments">已保存实验</button>
+            </div>
             <div class="history-modal-body" id="historyModalBody">
                 <div class="history-loading"><i class="fas fa-spinner fa-spin"></i> 加载中...</div>
             </div>
         </div>
     </div>
 
+    <style>
+        .history-tab {
+            padding: 12px 20px;
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: var(--text-secondary);
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .history-tab:hover { color: var(--text-primary); }
+        .history-tab.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }
+    </style>
+
     <!-- ============================== SCRIPTS ============================== -->
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
     <script>
+        let currentHistoryTab = 'reports';
+
         // ---- History Modal Functions ----
         function openHistoryModal() {
             const modal = document.getElementById('historyModal');
-            const body = document.getElementById('historyModalBody');
             modal.classList.add('active');
-            loadHistoryReports();
+            switchHistoryTab(currentHistoryTab);
         }
 
         function closeHistoryModal() {
             const modal = document.getElementById('historyModal');
             modal.classList.remove('active');
+        }
+
+        function switchHistoryTab(tab) {
+            currentHistoryTab = tab;
+            document.querySelectorAll('.history-tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('tab' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
+            if (tab === 'reports') {
+                loadHistoryReports();
+            } else {
+                loadSavedExperiments();
+            }
+        }
+
+        async function loadSavedExperiments() {
+            const body = document.getElementById('historyModalBody');
+            try {
+                const response = await fetch('/api/experiments');
+                const saved = await response.json();
+
+                if (!saved || saved.length === 0) {
+                    body.innerHTML = `
+                        <div class="history-empty">
+                            <i class="fas fa-bookmark"></i>
+                            <p>暂无已保存的实验</p>
+                            <p style="font-size:0.85rem;margin-top:10px;">在分析结果页面可以保存实验名称</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                body.innerHTML = saved.map(item => `
+                    <a href="/results/${item.task_id}" class="history-item-link">
+                        <div class="history-item-name">
+                            <i class="fas fa-bookmark"></i>
+                            ${item.name}
+                        </div>
+                        <div class="history-item-meta">
+                            <span class="history-item-time">
+                                <i class="fas fa-clock"></i>
+                                ${item.created_at || 'N/A'}
+                            </span>
+                            <span class="history-item-id">
+                                <i class="fas fa-fingerprint"></i>
+                                ${item.task_id}
+                            </span>
+                        </div>
+                    </a>
+                `).join('');
+            } catch (error) {
+                body.innerHTML = `
+                    <div class="history-empty">
+                        <i class="fas fa-exclamation-circle" style="color:#ff4757;"></i>
+                        <p>无法加载已保存实验</p>
+                        <p style="font-size:0.85rem;margin-top:10px;color:var(--text-muted);">错误: ${error.message}</p>
+                    </div>
+                `;
+            }
         }
 
         async function loadHistoryReports() {
@@ -1389,15 +1480,16 @@
                     <a href="/results/${item.task_id}" class="history-item-link">
                         <div class="history-item-name">
                             <i class="fas fa-file-audio"></i>
-                            ${item.audio1_name || 'Unknown'}
+                            ${item.experiment_name || item.audio1_name || 'Unknown'}
                         </div>
                         <div class="history-item-meta">
                             <span class="history-item-time">
                                 <i class="fas fa-clock"></i>
                                 ${item.created_at || 'N/A'}
                             </span>
+                            ${item.experiment_name ? '<span class="history-item-id"><i class="fas fa-tag"></i>' + item.experiment_name + '</span>' : ''}
                             <span class="history-item-id">
-                                <i class="fas fa-tag"></i>
+                                <i class="fas fa-fingerprint"></i>
                                 ${item.task_id}
                             </span>
                         </div>

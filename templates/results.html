@@ -3,1013 +3,1401 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>分析结果 — Audio Lab</title>
+    <title>{{ results.experiment_name or results['params']['experiment_name'] or 'Unnamed Experiment' }} — Audio Lab</title>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        /* ============================================
-           CSS VARIABLES — 与其他页面统一
-           ============================================ */
         :root {
-            --bg-primary: #0a0a0f;
-            --bg-secondary: #121218;
-            --bg-tertiary: #1a1a24;
-            --text-primary: #f0f0f5;
-            --text-secondary: rgba(240, 240, 245, 0.55);
-            --text-muted: rgba(240, 240, 245, 0.35);
+            --bg-primary: #0b0c10;
+            --bg-secondary: rgba(18, 18, 24, 0.95);
+            --bg-tertiary: rgba(26, 26, 36, 0.88);
+            --surface: rgba(255, 255, 255, 0.08);
+            --text-primary: #f5f5fb;
+            --text-secondary: rgba(245, 245, 251, 0.68);
+            --text-muted: rgba(245, 245, 251, 0.45);
             --accent: #FF6B00;
-            --accent-light: #ff8c33;
-            --accent-dark: #cc5500;
-            --accent-glow: rgba(255, 107, 0, 0.25);
-            --accent-soft: rgba(255, 107, 0, 0.08);
-            --border: rgba(255, 107, 0, 0.12);
-            --border-hover: rgba(255, 107, 0, 0.35);
-            --glass-bg: rgba(18, 18, 24, 0.6);
-            --glass-border: rgba(255, 255, 255, 0.06);
-            --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-            --card-shadow: 0 4px 24px rgba(0, 0, 0, 0.3), 0 0 60px var(--accent-glow);
+            --accent-soft: rgba(255, 107, 0, 0.11);
+            --accent-strong: #ff8f42;
+            --border: rgba(255, 255, 255, 0.12);
+            --border-hover: rgba(255, 107, 0, 0.28);
+            --glass: rgba(18, 18, 24, 0.58);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --shadow: 0 24px 80px rgba(0, 0, 0, 0.24);
+            --radius: 24px;
+            --noise-opacity: 0.03;
         }
-
         [data-theme="light"] {
             --bg-primary: #ffffff;
-            --bg-secondary: #f8f9fc;
-            --bg-tertiary: #eef0f6;
-            --text-primary: #1a1a28;
-            --text-secondary: rgba(26, 26, 40, 0.55);
-            --text-muted: rgba(26, 26, 40, 0.35);
+            --bg-secondary: rgba(255, 255, 255, 0.92);
+            --bg-tertiary: rgba(245, 247, 251, 0.95);
+            --surface: rgba(255, 255, 255, 0.82);
+            --text-primary: #12121b;
+            --text-secondary: rgba(18, 18, 27, 0.66);
+            --text-muted: rgba(18, 18, 27, 0.42);
             --accent: #FF2A55;
-            --accent-light: #ff4d73;
-            --accent-glow: rgba(255, 42, 85, 0.15);
-            --accent-soft: rgba(255, 42, 85, 0.06);
-            --border: rgba(255, 42, 85, 0.12);
-            --border-hover: rgba(255, 42, 85, 0.35);
-            --glass-bg: rgba(255, 255, 255, 0.65);
-            --glass-border: rgba(0, 0, 0, 0.06);
-            --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
-            --card-shadow: 0 4px 24px rgba(0, 0, 0, 0.06), 0 0 60px var(--accent-glow);
+            --accent-soft: rgba(255, 42, 85, 0.12);
+            --accent-strong: #ff4d73;
+            --border: rgba(18, 18, 27, 0.10);
+            --border-hover: rgba(255, 42, 85, 0.24);
+            --glass: rgba(255, 255, 255, 0.72);
+            --glass-border: rgba(18, 18, 27, 0.08);
+            --shadow: 0 24px 80px rgba(0, 0, 0, 0.12);
+            --noise-opacity: 0.02;
         }
-
-        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html { scroll-behavior: smooth; }
         body {
+            min-height: 100vh;
             font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: var(--bg-primary); color: var(--text-primary); min-height: 100vh;
-            transition: background 0.6s cubic-bezier(0.4, 0, 0.2, 1), color 0.6s ease;
+            background: radial-gradient(circle at top right, rgba(255,107,0,0.12), transparent 28%),
+                        linear-gradient(180deg, var(--bg-primary) 0%, #090a10 100%);
+            color: var(--text-primary);
+            overflow-x: hidden;
+            transition: background 0.4s ease, color 0.4s ease;
             position: relative;
         }
         body::before {
-            content: ''; position: fixed; inset: 0;
-            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
-            pointer-events: none; z-index: 99999; opacity: var(--noise-opacity, 0.03);
+            content: '';
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background-image: radial-gradient(circle at 25% 20%, rgba(255,107,0,0.12), transparent 18%),
+                              radial-gradient(circle at 80% 15%, rgba(255,255,255,0.08), transparent 20%);
+            opacity: var(--noise-opacity);
+            z-index: 99999;
         }
-        [data-theme="light"] body::before { opacity: 0.02; }
-        ::selection { background: var(--accent); color: #fff; }
+        [data-theme="light"] body::before { opacity: 0.015; }
 
-        /* Theme Switcher */
-        .theme-switcher {
-            position: fixed; top: 24px; right: 24px; z-index: 100000;
-            width: 56px; height: 30px; border-radius: 20px; cursor: pointer;
-            transition: all 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55); position: relative;
-            appearance: none; -webkit-appearance: none;
-            background: var(--bg-tertiary);
-            box-shadow: inset 0 2px 8px rgba(0,0,0,0.2), 0 0 0 2px var(--border);
+        /* Theme Toggle */
+        .theme-toggle {
+            position: fixed;
+            right: 24px;
+            top: 24px;
+            z-index: 100000;
+            width: 62px;
+            height: 34px;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            background: var(--glass);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            padding: 4px;
+            transition: all 0.35s cubic-bezier(0.25, 1, 0.5, 1);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
         }
-        .theme-switcher::after {
-            content: ''; position: absolute; top: 3px; left: 3px;
-            width: 24px; height: 24px; border-radius: 50%;
-            background: linear-gradient(135deg, var(--accent), var(--accent-light));
-            transition: transform 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
-            box-shadow: 0 2px 10px var(--accent-glow);
+        .theme-toggle:hover { transform: scale(1.03); }
+        .theme-toggle__thumb {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+            box-shadow: 0 10px 28px rgba(255, 107, 0, 0.25);
+            transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1);
         }
-        [data-theme="light"] .theme-switcher::after { transform: translateX(26px); }
-        .theme-switcher:hover { transform: scale(1.05); box-shadow: inset 0 2px 8px rgba(0,0,0,0.2), 0 0 0 2px var(--accent), 0 0 20px var(--accent-glow); }
+        [data-theme="light"] .theme-toggle__thumb { transform: translateX(28px); }
 
-        /* Sticky Header */
-        .result-nav {
-            position: sticky; top: 0; z-index: 100;
-            background: var(--glass-bg); backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
+        /* App Shell */
+        .app-shell {
+            min-height: 100vh;
+            padding: 48px 24px 64px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .window-frame {
+            width: min(1520px, 100%);
+            border-radius: 24px;
+            background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.08));
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+            overflow: hidden;
+            backdrop-filter: blur(30px);
+            -webkit-backdrop-filter: blur(30px);
+        }
+        .window-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            padding: 18px 28px;
+            background: rgba(255,255,255,0.04);
             border-bottom: 1px solid var(--glass-border);
-            padding: 16px 32px; display: flex; justify-content: space-between;
-            align-items: center; flex-wrap: wrap; gap: 14px;
         }
-        .nav-brand {
-            font-family: 'Cinzel', serif; font-size: 1.15rem; font-weight: 700;
-            color: var(--accent); letter-spacing: 2px; display: flex; align-items: center; gap: 10px;
+        .mac-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
-        .nav-brand i { animation: pulseIcon 2.5s infinite; }
-        @keyframes pulseIcon { 0%,100%{transform:scale(1)} 50%{transform:scale(1.12)} }
-        .nav-task-id {
-            font-family: 'JetBrains Mono', monospace; font-size: 0.78rem;
-            color: var(--text-muted); letter-spacing: 1px;
+        .mac-spot {
+            width: 12px;
+            height: 12px;
+            border-radius: 999px;
         }
-        .nav-btn {
-            display: inline-flex; align-items: center; gap: 8px;
-            padding: 9px 22px; border-radius: 25px; font-family: 'Cinzel', serif;
-            font-size: 0.82rem; font-weight: 600; letter-spacing: 1.5px; cursor: pointer;
-            text-decoration: none; transition: all 0.35s ease;
-            background: transparent; color: var(--accent); border: 1.5px solid var(--border-hover);
+        .mac-spot.red { background: #ff5f57; }
+        .mac-spot.yellow { background: #ffbd2e; }
+        .mac-spot.green { background: #28c940; }
+        .window-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-family: 'Cinzel', serif;
+            font-size: 1rem;
+            letter-spacing: 1px;
+            color: var(--accent);
         }
-        .nav-btn:hover { background: var(--accent-soft); transform: translateY(-1px); box-shadow: 0 6px 20px var(--accent-glow); }
+        .window-title i { font-size: 1.15rem; }
+        .window-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .ghost-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 18px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            text-decoration: none;
+            transition: transform 0.3s ease, border-color 0.3s ease;
+        }
+        .ghost-btn:hover { transform: translateY(-1px); border-color: var(--accent); }
+
+        /* Two Column Layout */
+        .window-body {
+            display: grid;
+            grid-template-columns: 280px minmax(0, 1fr);
+            gap: 0;
+            min-height: calc(100vh - 200px);
+        }
+
+        /* Sidebar */
+        .sidebar {
+            position: sticky;
+            top: 0;
+            align-self: start;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            padding: 28px 24px;
+            border-right: 1px solid var(--glass-border);
+            background: rgba(255,255,255,0.02);
+            max-height: calc(100vh - 120px);
+            overflow-y: auto;
+        }
+        .sidebar::-webkit-scrollbar { width: 4px; }
+        .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+        .sidebar-brand {
+            font-size: 0.75rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .sidebar-experiment {
+            padding: 16px;
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+        }
+        .sidebar-experiment-name {
+            font-family: 'Cinzel', serif;
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--accent);
+            word-break: break-all;
+            line-height: 1.4;
+        }
+        .sidebar-experiment-meta {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            margin-top: 8px;
+            line-height: 1.5;
+        }
+        .nav-menu {
+            display: grid;
+            gap: 8px;
+        }
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 16px;
+            border-radius: 14px;
+            color: var(--text-primary);
+            text-decoration: none;
+            border: 1px solid transparent;
+            transition: all 0.35s cubic-bezier(0.25, 1, 0.5, 1);
+            font-weight: 500;
+            background: rgba(255,255,255,0.03);
+        }
+        .nav-link:hover {
+            border-color: var(--border-hover);
+            background: var(--accent-soft);
+            color: var(--accent);
+        }
+        .nav-link.active {
+            background: linear-gradient(135deg, rgba(255,107,0,0.14), rgba(255,107,0,0.04));
+            color: var(--accent);
+            border-color: var(--accent-soft);
+        }
+        .nav-link i { width: 18px; text-align: center; }
 
         /* Main Content */
-        .main-wrap {
-            max-width: 1300px; margin: 0 auto; padding: 40px 24px 80px;
-            display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(300px, 360px);
-            gap: 28px;
+        .content-wrap {
+            padding: 32px 36px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
         }
 
-        /* Stats Grid — 毛玻璃卡片 */
+        /* Stats Grid */
         .stats-grid {
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 18px; margin-bottom: 40px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 8px;
         }
         .stat-card {
-            background: var(--glass-bg); backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px); border: 1px solid var(--glass-border);
-            border-radius: 16px; padding: 24px 20px; text-align: center;
-            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            position: relative; overflow: hidden; opacity: 0; transform: translateY(20px);
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 20px 16px;
+            text-align: center;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            transition: all 0.35s ease;
         }
-        .stat-card.visible { opacity: 1; transform: translateY(0); }
-        .stat-card::before {
-            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
-            background: linear-gradient(90deg, transparent, var(--accent), transparent);
-        }
-        .stat-card:hover { transform: translateY(-6px); border-color: var(--border-hover); box-shadow: var(--card-shadow); }
-        .stat-icon {
-            width: 48px; height: 48px; margin: 0 auto 12px;
-            background: var(--accent-soft); border: 1px solid var(--border);
-            border-radius: 12px; display: flex; align-items: center; justify-content: center;
-        }
-        .stat-icon i { font-size: 20px; color: var(--accent); }
-        .stat-val {
-            font-family: 'JetBrains Mono', monospace; font-size: 1.6rem;
-            font-weight: 600; color: var(--text-primary);
-        }
-        .stat-label { color: var(--text-muted); font-size: 0.78rem; letter-spacing: 1.5px; text-transform: uppercase; margin-top: 4px; }
-
-        /* Section — 毛玻璃面板 */
-        .section {
-            background: var(--glass-bg); backdrop-filter: blur(24px);
-            -webkit-backdrop-filter: blur(24px); border: 1px solid var(--glass-border);
-            border-radius: 22px; padding: 36px; margin-bottom: 28px;
-            position: relative; overflow: hidden;
-            transition: all 0.4s ease; opacity: 0; transform: translateY(20px);
-        }
-
-        .history-panel {
-            display: flex; flex-direction: column; gap: 18px;
-            min-height: 380px;
-        }
-
-        .history-card {
-            background: rgba(255, 255, 255, 0.08); border: 1px solid var(--glass-border);
-            border-radius: 20px; padding: 24px; box-shadow: var(--card-shadow);
-            backdrop-filter: blur(26px); -webkit-backdrop-filter: blur(26px);
-            display: flex; flex-direction: column; gap: 18px;
-        }
-
-        .history-title {
-            display: flex; align-items: center; justify-content: space-between;
-            gap: 12px;
-            font-family: 'Cinzel', serif; font-size: 1.1rem; font-weight: 700;
-            color: var(--accent); letter-spacing: 1.5px;
-        }
-
-        .history-subtitle {
-            color: var(--text-muted); font-size: 0.92rem; line-height: 1.6;
-        }
-
-        .history-list {
-            display: grid; gap: 12px;
-            max-height: 400px; overflow-y: auto;
-        }
-        .history-list::-webkit-scrollbar { width: 7px; }
-        .history-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.14); border-radius: 999px; }
-
-        .history-item {
-            display: grid; grid-template-columns: 1fr auto;
-            gap: 12px; padding: 16px 18px; border-radius: 16px;
-            background: var(--bg-tertiary); border: 1px solid var(--border);
-            transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1), border-color 0.3s ease;
-        }
-        .history-item:hover {
-            transform: translateX(4px);
+        .stat-card:hover {
             border-color: var(--border-hover);
+            transform: translateY(-3px);
         }
-
-        .history-item strong {
-            display: block; font-size: 0.95rem; color: var(--text-primary);
-        }
-        .history-item span { font-size: 0.82rem; color: var(--text-secondary); }
-        .history-item .history-badge {
-            display: inline-flex; align-items: center; gap: 6px;
-            padding: 8px 14px; border-radius: 999px;
+        .stat-icon {
+            width: 40px;
+            height: 40px;
+            margin: 0 auto 10px;
+            background: var(--accent-soft);
             border: 1px solid var(--border);
-            background: var(--accent-soft); color: var(--accent); font-family: 'JetBrains Mono', monospace;
-            font-size: 0.8rem;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .stat-icon i { font-size: 16px; color: var(--accent); }
+        .stat-val {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .stat-label {
+            color: var(--text-muted);
+            font-size: 0.7rem;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-top: 4px;
         }
 
-        .history-loading {
-            font-size: 0.95rem; color: var(--text-secondary); padding: 18px;
-            border: 1px dashed var(--border); border-radius: 16px;
-            text-align: center; background: var(--bg-secondary);
+        /* Content Panels */
+        .content-panel {
+            padding: 28px 32px;
+            background: var(--glass);
+            border-radius: 24px;
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(28px);
+            -webkit-backdrop-filter: blur(28px);
+            overflow: hidden;
         }
-        .section.visible { opacity: 1; transform: translateY(0); }
-        .section:hover { border-color: var(--border-hover); box-shadow: var(--card-shadow); }
-        .section::before {
-            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
-            background: linear-gradient(90deg, transparent, var(--accent), transparent); opacity: 0.45;
+        .panel-title {
+            font-family: 'Cinzel', serif;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--accent);
+            letter-spacing: 2px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
         }
+        .panel-title i { font-size: 1.1rem; }
 
-        .sec-title {
-            font-family: 'Cinzel', serif; font-size: 1.15rem; font-weight: 700;
-            color: var(--accent); letter-spacing: 2px; margin-bottom: 24px;
-            display: flex; align-items: center; gap: 12px;
-        }
-        .sec-title i { font-size: 1.2rem; }
-
-        /* Data Grid inside sections */
+        /* Data Grid */
         .data-grid {
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-            gap: 14px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
         }
         .data-cell {
-            background: var(--bg-tertiary); border: 1px solid var(--border);
-            border-radius: 12px; padding: 18px; transition: all 0.3s ease;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px 16px;
+            transition: all 0.3s ease;
         }
         .data-cell:hover { border-color: var(--border-hover); transform: translateY(-2px); }
-        .data-key { color: var(--text-muted); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
-        .data-val { font-family: 'JetBrains Mono', monospace; font-size: 1.05rem; font-weight: 600; color: var(--accent); }
-
-        /* Plot Container */
-        .plot-box {
-            background: var(--bg-tertiary); border: 1px solid var(--border);
-            border-radius: 14px; padding: 18px; margin-bottom: 16px;
-            transition: all 0.35s ease; overflow: hidden;
+        .data-key {
+            color: var(--text-muted);
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 6px;
         }
-        .plot-box:hover { border-color: var(--border-hover); transform: scale(1.008); box-shadow: 0 8px 30px rgba(0,0,0,0.15); }
-        .plot-box img { width: 100%; border-radius: 10px; display: block; }
-        .plot-caption {
-            color: var(--text-secondary); font-size: 0.88rem; margin-bottom: 12px;
-            display: flex; align-items: center; gap: 8px;
+        .data-val {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--accent);
         }
-        .plot-caption i { color: var(--accent); font-size: 0.85rem; }
 
+        /* Image Grid - Uniform Size */
         .plots-grid {
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
-            gap: 20px; margin-top: 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            margin-top: 20px;
+        }
+        .plot-box {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 24px;
+            transition: all 0.35s ease;
+            overflow: hidden;
+        }
+        .plot-box:hover {
+            border-color: var(--border-hover);
+            transform: translateY(-3px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.2);
+        }
+        .plot-caption {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .plot-caption i { color: var(--accent); font-size: 0.95rem; }
+        .plot-box img {
+            width: 100%;
+            height: 560px;
+            object-fit: contain;
+            border-radius: 12px;
+            background: var(--bg-primary);
+            display: block;
         }
 
         /* Table */
         .tbl {
-            width: 100%; border-collapse: collapse; margin-top: 16px;
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
         }
         .tbl thead th {
-            background: var(--accent-soft); color: var(--accent);
-            font-family: 'Cinzel', serif; font-size: 0.82rem;
-            padding: 14px 18px; text-align: left; letter-spacing: 1px;
+            background: var(--accent-soft);
+            color: var(--accent);
+            font-family: 'Cinzel', serif;
+            font-size: 0.78rem;
+            padding: 12px 16px;
+            text-align: left;
+            letter-spacing: 1px;
             border-bottom: 2px solid var(--border);
         }
-        .tbl tbody tr { border-bottom: 1px solid var(--border); transition: all 0.3s; }
+        .tbl tbody tr {
+            border-bottom: 1px solid var(--border);
+            transition: all 0.3s;
+        }
         .tbl tbody tr:hover { background: var(--accent-soft); }
-        .tbl td { padding: 13px 18px; color: var(--text-secondary); font-size: 0.92rem; }
+        .tbl td {
+            padding: 12px 16px;
+            color: var(--text-secondary);
+            font-size: 0.88rem;
+        }
         .model-name { font-weight: 600; color: var(--text-primary); }
         .metric-num { font-family: 'JetBrains Mono', monospace; color: var(--accent); font-weight: 500; }
 
         /* Band Cards */
         .band-grid {
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 18px; margin-top: 18px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 16px;
+            margin-top: 16px;
         }
         .band-card {
-            background: var(--bg-tertiary); border-left: 4px solid var(--accent);
-            border-radius: 0 14px 14px 0; padding: 22px;
+            background: rgba(255,255,255,0.04);
+            border-left: 4px solid var(--accent);
+            border-radius: 0 14px 14px 0;
+            padding: 18px;
             transition: all 0.35s ease;
         }
-        .band-card:hover { transform: translateX(5px); box-shadow: -6px 0 24px var(--accent-glow); }
-        .band-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
-        .band-name { font-family: 'Cinzel', serif; font-size: 1rem; font-weight: 700; color: var(--text-primary); }
-        .band-badge {
-            background: linear-gradient(135deg, var(--accent), var(--accent-light));
-            color: #000; padding: 4px 14px; border-radius: 20px;
-            font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; font-weight: 700;
+        .band-card:hover {
+            transform: translateX(5px);
+            box-shadow: -6px 0 24px var(--accent-glow);
         }
-        .band-row { display: flex; justify-content: space-between; font-size: 0.88rem; padding: 4px 0; }
+        .band-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .band-name {
+            font-family: 'Cinzel', serif;
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+        .band-badge {
+            background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+            color: #000;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            font-weight: 700;
+        }
+        .band-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.82rem;
+            padding: 3px 0;
+        }
         .band-k { color: var(--text-muted); }
         .band-v { font-family: 'JetBrains Mono', monospace; color: var(--accent); }
 
         /* Ranking List */
-        .rank-list { list-style: none; margin-top: 22px; }
+        .rank-list {
+            list-style: none;
+            margin-top: 18px;
+        }
         .rank-list li {
-            display: flex; align-items: center; gap: 16px;
-            padding: 14px 18px; background: var(--bg-tertiary);
-            border-radius: 12px; margin-bottom: 10px;
-            border-left: 3px solid var(--border); transition: all 0.35s;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 12px 16px;
+            background: rgba(255,255,255,0.04);
+            border-radius: 12px;
+            margin-bottom: 8px;
+            border-left: 3px solid var(--border);
+            transition: all 0.35s;
         }
         .rank-list li:nth-child(1) { border-left-color: #ffd700; }
         .rank-list li:nth-child(2) { border-left-color: #c0c0c0; }
         .rank-list li:nth-child(3) { border-left-color: #cd7f32; }
         .rank-list li:hover { background: var(--accent-soft); transform: translateX(5px); }
         .rank-n {
-            width: 34px; height: 34px; background: linear-gradient(135deg, var(--accent), var(--accent-light));
-            border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            font-family: 'Cinzel', serif; font-weight: 800; color: #000; font-size: 0.9rem; flex-shrink: 0;
+            width: 30px;
+            height: 30px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Cinzel', serif;
+            font-weight: 800;
+            color: #000;
+            font-size: 0.85rem;
+            flex-shrink: 0;
         }
         .rank-info { flex: 1; }
-        .rank-band-name { font-weight: 600; color: var(--text-primary); }
-        .rank-detail { font-size: 0.84rem; color: var(--text-muted); margin-top: 2px; }
-        .rank-rmse { font-family: 'JetBrains Mono', monospace; color: var(--accent); font-size: 1rem; font-weight: 600; }
+        .rank-band-name { font-weight: 600; color: var(--text-primary); font-size: 0.9rem; }
+        .rank-detail { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; }
+        .rank-rmse { font-family: 'JetBrains Mono', monospace; color: var(--accent); font-size: 0.95rem; font-weight: 600; }
 
-        /* Footer */
-        .footer {
-            padding: 30px 24px; text-align: center; border-top: 1px solid var(--border);
-            background: var(--bg-secondary); transition: background 0.6s ease;
-        }
-        .footer p { font-size: 0.82rem; color: var(--text-muted); letter-spacing: 1px; }
-        .footer strong { color: var(--accent); font-family: 'Cinzel', serif; }
-
-        @media (max-width: 768px) {
-            .result-nav { padding: 12px 16px; flex-direction: column; text-align: center; }
-            .stats-grid { grid-template-columns: repeat(2, 1fr); }
-            .plots-grid { grid-template-columns: 1fr; }
-            .section { padding: 22px; border-radius: 16px; }
-            .main-wrap { display: block; padding: 24px 16px 50px; }
-            .theme-switcher { top: 16px; right: 16px; width: 48px; height: 26px; }
-            .theme-switcher::after { width: 20px; height: 20px; }
-            [data-theme="light"] .theme-switcher::after { transform: translateX(22px); }
-        }
-
-        /* Log Section */
+        /* Terminal Log */
         .log-container {
-            background: var(--bg-tertiary);
+            background: #0d0d12;
             border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 16px;
-            margin-top: 16px;
+            border-radius: 14px;
+            overflow: hidden;
         }
-        .log-content {
-            max-height: 400px;
-            overflow-y: auto;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.8rem;
-            line-height: 1.6;
-            color: var(--text-secondary);
-            background: var(--bg-primary);
-            border-radius: 8px;
-            padding: 12px;
+        [data-theme="light"] .log-container {
+            background: #1a1a28;
         }
-        .log-entry {
-            padding: 4px 8px;
-            border-radius: 4px;
-            margin-bottom: 2px;
-        }
-
-        .history-panel.visible { opacity: 1; transform: translateY(0); }
-        .log-entry:hover {
-            background: var(--accent-soft);
-        }
-        .log-error {
-            color: #ff4757;
-            background: rgba(255, 71, 87, 0.1);
-        }
-        .log-warning {
-            color: #ffa502;
-            background: rgba(255, 165, 2, 0.1);
-        }
-        .log-success {
-            color: #2ed573;
-            background: rgba(46, 213, 115, 0.1);
-        }
-        .log-info {
-            color: var(--text-secondary);
-        }
-        .log-download-btn {
-            margin-top: 12px;
-            padding: 10px 20px;
-            background: var(--accent);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-family: 'Outfit', sans-serif;
-            font-size: 0.9rem;
-            transition: all 0.3s ease;
+        .log-header {
             display: flex;
             align-items: center;
             gap: 8px;
+            padding: 12px 16px;
+            background: rgba(255,255,255,0.03);
+            border-bottom: 1px solid var(--border);
         }
-        .log-download-btn:hover {
-            background: var(--accent-light);
-            transform: translateY(-2px);
+        .log-header-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
         }
-
-        /* Navigation Links */
-        .nav-link {
-            color: var(--text-secondary);
-            text-decoration: none;
-            font-size: 0.85rem;
-            padding: 6px 12px;
-            border-radius: 6px;
-            transition: all 0.3s ease;
-            font-family: 'Outfit', sans-serif;
-        }
-        .nav-link:hover {
-            color: var(--accent);
-            background: var(--accent-soft);
-        }
-
-        /* Band Details */
-        .band-details {
-            margin-top: 12px;
-            border-top: 1px solid var(--border);
-            padding-top: 8px;
-        }
-        .band-details-summary {
-            cursor: pointer;
+        .log-header-dot.red { background: #ff5f57; }
+        .log-header-dot.yellow { background: #ffbd2e; }
+        .log-header-dot.green { background: #28c940; }
+        .log-header-title {
+            margin-left: 8px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
             color: var(--text-muted);
-            font-size: 0.8rem;
-            padding: 4px 8px;
-            border-radius: 4px;
-            transition: all 0.3s ease;
+            letter-spacing: 1px;
         }
-        .band-details-summary:hover {
-            color: var(--accent);
-            background: var(--accent-soft);
+        .log-content {
+            max-height: 450px;
+            overflow-y: auto;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78rem;
+            line-height: 1.7;
+            padding: 14px 18px;
+            background: #0d0d12;
+            color: #e0e0e0;
         }
-        .band-details-content {
+        .log-content::-webkit-scrollbar { width: 6px; }
+        .log-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+        .log-entry {
+            padding: 2px 0;
+            display: flex;
+            gap: 12px;
+        }
+        .log-entry:hover { background: rgba(255,255,255,0.03); }
+        .log-ts { color: #666; flex-shrink: 0; user-select: none; }
+        .log-msg { word-break: break-all; flex: 1; }
+        .log-entry.divider { border-top: 1px dashed #333; margin: 8px 0; padding: 4px 0; }
+        .log-entry.divider .log-ts, .log-entry.divider .log-msg { color: #555; }
+        .log-entry.phase .log-msg { color: var(--accent); font-weight: 600; }
+        .log-entry.success .log-msg { color: #22c55e; font-weight: 600; }
+        .log-entry.error .log-msg { color: #ef4444; }
+        .log-entry.warning .log-msg { color: #f59e0b; }
+        .log-entry.info .log-msg { color: #60a5fa; }
+
+        /* History Panel */
+        .history-panel {
+            padding: 20px 24px;
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
             margin-top: 8px;
-            padding: 8px;
-            background: var(--bg-primary);
-            border-radius: 6px;
+        }
+        .history-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 14px;
+        }
+        .history-title {
+            font-family: 'Cinzel', serif;
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--accent);
+            letter-spacing: 1.5px;
+        }
+        .history-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            background: var(--accent-soft);
+            color: var(--accent);
+            font-family: 'JetBrains Mono', monospace;
             font-size: 0.75rem;
         }
-        .model-detail {
-            padding: 4px 0;
-            color: var(--text-secondary);
+        .history-subtitle {
+            color: var(--text-muted);
+            font-size: 0.82rem;
+            margin-bottom: 12px;
         }
-        .error-text {
-            color: #ff4757;
-            font-style: italic;
+        .history-list {
+            display: grid;
+            gap: 10px;
+            max-height: 280px;
+            overflow-y: auto;
+        }
+        .history-list::-webkit-scrollbar { width: 5px; }
+        .history-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 999px; }
+        .history-item {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 10px;
+            padding: 14px 16px;
+            border-radius: 14px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid var(--border);
+            text-decoration: none;
+            color: inherit;
+            transition: all 0.3s ease;
+        }
+        .history-item:hover {
+            transform: translateX(4px);
+            border-color: var(--border-hover);
+            background: var(--accent-soft);
+        }
+        .history-item strong {
+            display: block;
+            font-size: 0.88rem;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .history-item span {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+        .history-item .history-badge {
+            align-self: center;
+        }
+        .history-loading {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            padding: 16px;
+            border: 1px dashed var(--border);
+            border-radius: 14px;
+            text-align: center;
+            background: rgba(255,255,255,0.02);
+        }
+
+        /* Experiment Name Input */
+        .experiment-input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+        .experiment-input {
+            flex: 1;
+            padding: 12px 16px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+        .experiment-input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-soft);
+        }
+        .experiment-btn {
+            padding: 12px 20px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .experiment-btn:hover {
+            background: var(--accent-strong);
+            transform: translateY(-1px);
+        }
+        .saved-experiments {
+            margin-top: 12px;
+        }
+        .saved-exp-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .saved-exp-item:hover {
+            border-color: var(--accent);
+            background: var(--accent-soft);
+        }
+        .saved-exp-name {
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 0.88rem;
+        }
+        .saved-exp-actions {
+            display: flex;
+            gap: 8px;
+        }
+        .saved-exp-btn {
+            padding: 6px 10px;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .saved-exp-btn.load {
+            background: var(--accent-soft);
+            color: var(--accent);
+        }
+        .saved-exp-btn.delete {
+            background: rgba(239,68,68,0.1);
+            color: #ef4444;
+        }
+        .saved-exp-btn:hover {
+            transform: scale(1.05);
+        }
+
+        /* Footer */
+        .footer {
+            padding: 24px;
+            text-align: center;
+            border-top: 1px solid var(--glass-border);
+            background: rgba(255,255,255,0.02);
+        }
+        .footer p {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            letter-spacing: 1px;
+        }
+        .footer strong { color: var(--accent); font-family: 'Cinzel', serif; }
+
+        /* Responsive */
+        @media (max-width: 1100px) {
+            .window-body { grid-template-columns: 1fr; }
+            .sidebar { position: relative; top: auto; max-height: none; border-right: none; border-bottom: 1px solid var(--glass-border); }
+            .plots-grid { grid-template-columns: 1fr; }
+            .plot-box { grid-column: 1; }
+        }
+        @media (max-width: 720px) {
+            .window-frame { border-radius: 16px; }
+            .window-header, .content-wrap { padding: 16px; }
+            .content-panel { padding: 20px; }
+            .theme-toggle { right: 16px; top: 16px; }
         }
     </style>
 </head>
-<body>
+<body data-theme="dark">
+    <button class="theme-toggle" type="button" aria-label="切换主题">
+        <span class="theme-toggle__thumb"></span>
+    </button>
 
-    <!-- Theme Switcher -->
-    <input type="checkbox" class="theme-switcher" id="themeToggle" onclick="toggleTheme()">
+    <div class="app-shell">
+        <div class="window-frame">
+            <header class="window-header">
+                <div class="mac-controls">
+                    <span class="mac-spot red"></span>
+                    <span class="mac-spot yellow"></span>
+                    <span class="mac-spot green"></span>
+                </div>
+                <div class="window-title">
+                    <i class="fas fa-chart-line"></i>
+                    {{ results.experiment_name or results['params']['experiment_name'] or 'Unnamed Experiment' }}
+                </div>
+                <div class="window-actions">
+                    <a class="ghost-btn" href="/docs"><i class="fas fa-book"></i> DOCS</a>
+                    <a class="ghost-btn" href="/"><i class="fas fa-plus"></i> NEW</a>
+                </div>
+            </header>
 
-    <!-- Nav -->
-    <nav class="result-nav">
-        <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
-            <span class="nav-brand"><i class="fas fa-chart-line"></i> ANALYSIS RESULTS</span>
-            <span class="nav-task-id">TASK {{ task_id }}</span>
-        </div>
-        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
-            <a href="#sec-ts" class="nav-link">Time Series</a>
-            <a href="#sec-viz" class="nav-link">Visualizations</a>
-            <a href="#sec-pred" class="nav-link">Predictions</a>
-            <a href="#sec-band" class="nav-link">Bands</a>
-            {% if results.get('dynamics') %}<a href="#sec-dynamics" class="nav-link">Dynamics</a>{% endif %}
-            {% if results.get('volatility') %}<a href="#sec-volatility" class="nav-link">Volatility</a>{% endif %}
-            <a href="#sec-log" class="nav-link">Log</a>
-            <a href="/docs" class="nav-btn"><i class="fas fa-book"></i> DOCS</a>
-            <a href="{{ url_for('index') }}" class="nav-btn"><i class="fas fa-arrow-left"></i> NEW</a>
-        </div>
-    </nav>
-
-    <!-- Main -->
-    <div class="main-wrap">
-
-        <!-- Stats Overview -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-icon"><i class="fas fa-file-audio"></i></div>
-                <div class="stat-val">{{ results['params']['audio1_name'][:18] }}...</div>
-                <div class="stat-label">Audio File</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon"><i class="fas fa-clock"></i></div>
-                <div class="stat-val">{{ results['audio_info']['duration']|float|round(2) }}s</div>
-                <div class="stat-label">Duration</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon"><i class="fas fa-wave-square"></i></div>
-                <div class="stat-val">{{ results['audio_info']['sample_rate'] }}</div>
-                <div class="stat-label">Sample Rate (Hz)</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon"><i class="fas fa-forward"></i></div>
-                <div class="stat-val">{{ results['params']['forecast_horizon'] }}</div>
-                <div class="stat-label">Forecast Steps</div>
-            </div>
-        </div>
-
-        <aside class="history-panel section" id="sec-history">
-            <div class="history-card">
-                <div class="history-title"><span><i class="fas fa-history"></i> HISTORICAL REPORTS</span><span class="history-badge" id="historyCount">--</span></div>
-                <div class="history-subtitle">自动读取 <code>static/outputs</code> 历史分析报告，并按最新时间排序显示。点击即可打开已生成的结果页面。</div>
-                <div class="history-list" id="historyList">
-                    <div class="history-loading">加载中，请稍候...</div>
-                </div>
-            </div>
-        </aside>
-
-        <!-- Time Series Analysis -->
-        <div class="section" id="sec-ts">
-            <h2 class="sec-title"><i class="fas fa-project-diagram"></i> TIME SERIES ANALYSIS</h2>
-            <div class="data-grid">
-                <div class="data-cell">
-                    <div class="data-key">Dominant Frequency</div>
-                    <div class="data-val">{{ results['periodicity']['dominant_frequency']|float|round(2) }} Hz</div>
-                </div>
-                <div class="data-cell">
-                    <div class="data-key">Dominant Period</div>
-                    <div class="data-val">{{ results['periodicity']['dominant_period_seconds']|float|round(4) }} s</div>
-                </div>
-                <div class="data-cell">
-                    <div class="data-key">ACF Peaks Count</div>
-                    <div class="data-val">{{ results['periodicity']['acf_peaks']|length }}</div>
-                </div>
-                <div class="data-cell">
-                    <div class="data-key">Zero-Crossing Rate</div>
-                    <div class="data-val">{{ results['complexity']['zero_crossing_rate']|float|round(4) }}</div>
-                </div>
-                <div class="data-cell">
-                    <div class="data-key">Sample Entropy</div>
-                    <div class="data-val">{{ results['complexity']['sample_entropy']|float|round(4) }}</div>
-                </div>
-                <div class="data-cell">
-                    <div class="data-key">Spectral Flatness</div>
-                    <div class="data-val">{{ results['spectral_flatness']|float|round(4) }}</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Visualizations -->
-        <div class="section" id="sec-viz">
-            <h2 class="sec-title"><i class="fas fa-image"></i> VISUALIZATION</h2>
-            <div class="plots-grid">
-                {% if plot_urls.get('waveform') %}
-                <div class="plot-box">
-                    <div class="plot-caption"><i class="fas fa-wave-square"></i> Waveform</div>
-                    <img src="{{ plot_urls.waveform }}" alt="Waveform" loading="lazy">
-                </div>
-                {% endif %}
-
-                {% if plot_urls.get('fft_spectrum') %}
-                <div class="plot-box">
-                    <div class="plot-caption"><i class="fas fa-chart-bar"></i> FFT Spectrum</div>
-                    <img src="{{ plot_urls.fft_spectrum }}" alt="FFT" loading="lazy">
-                </div>
-                {% endif %}
-
-                {% if plot_urls.get('stft_spectrogram') %}
-                <div class="plot-box" style="grid-column: 1 / -1;">
-                    <div class="plot-caption"><i class="fas fa-th"></i> STFT Spectrogram</div>
-                    <img src="{{ plot_urls.stft_spectrogram }}" alt="STFT Spectrogram" loading="lazy">
-                </div>
-                {% endif %}
-
-                {% if plot_urls.get('mel_spectrogram') %}
-                <div class="plot-box" style="grid-column: 1 / -1;">
-                    <div class="plot-caption"><i class="fas fa-th"></i> Mel Spectrogram</div>
-                    <img src="{{ plot_urls.mel_spectrogram }}" alt="Mel Spectrogram" loading="lazy">
-                </div>
-                {% endif %}
-
-                {% if plot_urls.get('mfcc') %}
-                <div class="plot-box">
-                    <div class="plot-caption"><i class="fas fa-compact-disc"></i> MFCC Heatmap</div>
-                    <img src="{{ plot_urls.mfcc }}" alt="MFCC Coefficients" loading="lazy">
-                </div>
-                {% endif %}
-
-                {% if plot_urls.get('acf_pacf') %}
-                <div class="plot-box">
-                    <div class="plot-caption"><i class="fas fa-chart-line"></i> ACF / PACF</div>
-                    <img src="{{ plot_urls.acf_pacf }}" alt="ACF PACF" loading="lazy">
-                </div>
-                {% endif %}
-
-                {% if plot_urls.get('periodicity') %}
-                <div class="plot-box">
-                    <div class="plot-caption"><i class="fas fa-wave-square"></i> Periodicity Analysis</div>
-                    <img src="{{ plot_urls.periodicity }}" alt="Periodicity" loading="lazy">
-                </div>
-                {% endif %}
-
-                {% for key, url in plot_urls.items() %}
-                    {% if key not in ['waveform', 'fft_spectrum', 'stft_spectrogram', 'mel_spectrogram', 'mfcc', 'acf_pacf', 'periodicity', 'prediction_comparison', 'error_comparison', 'band_errors', 'band_error_bars']
-                          and not key.startswith('dynamics/')
-                          and not key.startswith('volatility/')
-                          and not key.startswith('discovery/') %}
-                    <div class="plot-box">
-                        <div class="plot-caption"><i class="fas fa-image"></i> {{ key.replace('_', ' ').title() }}</div>
-                        <img src="{{ url }}" alt="{{ key }}" loading="lazy">
+            <div class="window-body">
+                <!-- Sidebar -->
+                <aside class="sidebar">
+                    <div class="sidebar-brand">Experiment</div>
+                    <div class="sidebar-experiment">
+                        <div class="sidebar-experiment-name">{{ results.experiment_name or results['params']['experiment_name'] or 'Unnamed' }}</div>
+                        <div class="sidebar-experiment-meta">
+                            <div>Task: {{ task_id }}</div>
+                            <div>Audio: {{ results['params']['audio1_name'][:20] }}...</div>
+                            <div>Forecast: {{ results['params']['forecast_horizon'] }}</div>
+                        </div>
                     </div>
+
+                    <div class="nav-menu">
+                        <a class="nav-link" href="#sec-overview"><i class="fas fa-info-circle"></i> Overview</a>
+                    <a class="nav-link" href="#sec-ts"><i class="fas fa-wave-square"></i> Time Series</a>
+                    {% if results.get('timeseries', {}).get('white_noise_test') %}<a class="nav-link" href="#sec-whitenoise"><i class="fas fa-random"></i> White Noise</a>{% endif %}
+                    <a class="nav-link" href="#sec-viz"><i class="fas fa-image"></i> Visualizations</a>
+                        <a class="nav-link" href="#sec-pred"><i class="fas fa-brain"></i> Predictions</a>
+                        <a class="nav-link" href="#sec-band"><i class="fas fa-broadcast-tower"></i> Bands</a>
+                        {% if results.get('dynamics') %}<a class="nav-link" href="#sec-dynamics"><i class="fas fa-chart-area"></i> Dynamics</a>{% endif %}
+                        {% if results.get('volatility') %}<a class="nav-link" href="#sec-volatility"><i class="fas fa-chart-line"></i> Volatility</a>{% endif %}
+                        {% if results.get('discovery') %}<a class="nav-link" href="#sec-discovery"><i class="fas fa-search"></i> Discovery</a>{% endif %}
+                        {% if results.get('model_analysis') %}<a class="nav-link" href="#sec-models"><i class="fas fa-project-diagram"></i> Models</a>{% endif %}
+                        <a class="nav-link" href="#sec-log"><i class="fas fa-terminal"></i> Analysis Log</a>
+                    </div>
+
+                    <!-- Experiment Naming -->
+                    <div style="margin-top: 16px;">
+                        <div class="sidebar-brand">Saved Experiments</div>
+                        <div class="experiment-input-group">
+                            <input type="text" class="experiment-input" id="expNameInput" placeholder="Experiment name...">
+                            <button class="experiment-btn" onclick="saveExperiment()">
+                                <i class="fas fa-save"></i>
+                            </button>
+                        </div>
+                        <div class="saved-experiments" id="savedExperiments"></div>
+                    </div>
+                </aside>
+
+                <!-- Main Content -->
+                <main class="content-wrap">
+                    <!-- Overview Stats -->
+                    <section id="sec-overview">
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="stat-icon"><i class="fas fa-file-audio"></i></div>
+                                <div class="stat-val">{{ results['params']['audio1_name'][:15] }}...</div>
+                                <div class="stat-label">Audio File</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-icon"><i class="fas fa-clock"></i></div>
+                                <div class="stat-val">{{ results['audio_info']['duration']|float|round(2) }}s</div>
+                                <div class="stat-label">Duration</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-icon"><i class="fas fa-wave-square"></i></div>
+                                <div class="stat-val">{{ results['audio_info']['sample_rate'] }}</div>
+                                <div class="stat-label">Sample Rate</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-icon"><i class="fas fa-forward"></i></div>
+                                <div class="stat-val">{{ results['params']['forecast_horizon'] }}</div>
+                                <div class="stat-label">Forecast</div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Time Series Analysis -->
+                    <section class="content-panel" id="sec-ts">
+                        <h2 class="panel-title"><i class="fas fa-wave-square"></i> TIME SERIES ANALYSIS</h2>
+                        <div class="data-grid">
+                            <div class="data-cell">
+                                <div class="data-key">Dominant Frequency</div>
+                                <div class="data-val">{{ results['periodicity']['dominant_frequency']|float|round(2) }} Hz</div>
+                            </div>
+                            <div class="data-cell">
+                                <div class="data-key">Dominant Period</div>
+                                <div class="data-val">{{ results['periodicity']['dominant_period_seconds']|float|round(4) }} s</div>
+                            </div>
+                            <div class="data-cell">
+                                <div class="data-key">ACF Peaks</div>
+                                <div class="data-val">{{ results['periodicity']['acf_peaks']|length }}</div>
+                            </div>
+                            <div class="data-cell">
+                                <div class="data-key">Zero-Crossing Rate</div>
+                                <div class="data-val">{{ results['complexity']['zero_crossing_rate']|float|round(4) }}</div>
+                            </div>
+                            <div class="data-cell">
+                                <div class="data-key">Sample Entropy</div>
+                                <div class="data-val">{{ results['complexity']['sample_entropy']|float|round(4) }}</div>
+                            </div>
+                            <div class="data-cell">
+                                <div class="data-key">Spectral Flatness</div>
+                                <div class="data-val">{{ results['spectral_flatness']|float|round(4) }}</div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- White Noise Test Results -->
+                    {% if results.get('timeseries', {}).get('white_noise_test') %}
+                    <section class="content-panel" id="sec-whitenoise">
+                        <h2 class="panel-title"><i class="fas fa-random"></i> WHITE NOISE TESTING</h2>
+                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-top:16px;">
+                            <div style="padding:20px;background:{{ '#16213e' if results['timeseries']['white_noise_test']['overall']['is_white_noise'] else '#2d1f1f' }};border-radius:16px;border:1px solid {{ '#00d9ff' if results['timeseries']['white_noise_test']['overall']['is_white_noise'] else '#ff6b6b' }};">
+                                <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+                                    <span style="font-size:2rem;">{{ '✓' if results['timeseries']['white_noise_test']['overall']['is_white_noise'] else '✗' }}</span>
+                                    <div>
+                                        <div style="font-family:'Cinzel',serif;font-size:1.1rem;color:{{ '#00d9ff' if results['timeseries']['white_noise_test']['overall']['is_white_noise'] else '#ff6b6b' }};">{{ 'White Noise' if results['timeseries']['white_noise_test']['overall']['is_white_noise'] else 'Not White Noise' }}</div>
+                                        <div style="font-size:0.8rem;color:var(--text-muted);">{{ results['timeseries']['white_noise_test']['overall']['assessment'] }}</div>
+                                    </div>
+                                </div>
+                                <div style="display:flex;gap:8px;">
+                                    <span style="font-size:0.85rem;color:var(--text-secondary);">Tests:</span>
+                                    <span style="font-family:'JetBrains Mono',monospace;color:var(--accent);">{{ results['timeseries']['white_noise_test']['overall']['tests_passed'] }}/{{ results['timeseries']['white_noise_test']['overall']['total_tests'] }}</span>
+                                    <span style="font-size:0.85rem;color:var(--text-muted);">passed</span>
+                                </div>
+                            </div>
+
+                            <div style="padding:18px;background:var(--glass);border-radius:14px;border:1px solid var(--border);">
+                                <div style="font-family:'Cinzel',serif;font-size:0.9rem;color:var(--accent);margin-bottom:10px;">Ljung-Box Test</div>
+                                <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                                    <span style="font-size:0.85rem;color:var(--text-muted);">Statistic</span>
+                                    <span style="font-family:'JetBrains Mono',monospace;">{{ results['timeseries']['white_noise_test']['ljung_box']['statistic']|float|round(4) }}</span>
+                                </div>
+                                <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                                    <span style="font-size:0.85rem;color:var(--text-muted);">p-value</span>
+                                    <span style="font-family:'JetBrains Mono',monospace;color:{{ '#22c55e' if results['timeseries']['white_noise_test']['ljung_box']['p_value']|float > 0.05 else '#ef4444' }};">{{ results['timeseries']['white_noise_test']['ljung_box']['p_value']|float|round(4) }}</span>
+                                </div>
+                                <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:8px;">{{ results['timeseries']['white_noise_test']['ljung_box']['interpretation'] }}</div>
+                            </div>
+
+                            <div style="padding:18px;background:var(--glass);border-radius:14px;border:1px solid var(--border);">
+                                <div style="font-family:'Cinzel',serif;font-size:0.9rem;color:var(--accent);margin-bottom:10px;">Box-Pierce Test</div>
+                                <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                                    <span style="font-size:0.85rem;color:var(--text-muted);">Statistic</span>
+                                    <span style="font-family:'JetBrains Mono',monospace;">{{ results['timeseries']['white_noise_test']['box_pierce']['statistic']|float|round(4) }}</span>
+                                </div>
+                                <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                                    <span style="font-size:0.85rem;color:var(--text-muted);">p-value</span>
+                                    <span style="font-family:'JetBrains Mono',monospace;color:{{ '#22c55e' if results['timeseries']['white_noise_test']['box_pierce']['p_value']|float > 0.05 else '#ef4444' }};">{{ results['timeseries']['white_noise_test']['box_pierce']['p_value']|float|round(4) }}</span>
+                                </div>
+                                <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:8px;">{{ results['timeseries']['white_noise_test']['box_pierce']['interpretation'] }}</div>
+                            </div>
+
+                            <div style="padding:18px;background:var(--glass);border-radius:14px;border:1px solid var(--border);">
+                                <div style="font-family:'Cinzel',serif;font-size:0.9rem;color:var(--accent);margin-bottom:10px;">Jarque-Bera (Normality)</div>
+                                <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                                    <span style="font-size:0.85rem;color:var(--text-muted);">Statistic</span>
+                                    <span style="font-family:'JetBrains Mono',monospace;">{{ results['timeseries']['white_noise_test']['jarque_bera']['statistic']|float|round(4) }}</span>
+                                </div>
+                                <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                                    <span style="font-size:0.85rem;color:var(--text-muted);">p-value</span>
+                                    <span style="font-family:'JetBrains Mono',monospace;color:{{ '#22c55e' if results['timeseries']['white_noise_test']['jarque_bera']['p_value']|float > 0.05 else '#ef4444' }};">{{ results['timeseries']['white_noise_test']['jarque_bera']['p_value']|float|round(4) }}</span>
+                                </div>
+                                <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:8px;">{{ results['timeseries']['white_noise_test']['jarque_bera']['interpretation'] }}</div>
+                            </div>
+
+                            <div style="padding:18px;background:var(--glass);border-radius:14px;border:1px solid var(--border);">
+                                <div style="font-family:'Cinzel',serif;font-size:0.9rem;color:var(--accent);margin-bottom:10px;">ACF Test</div>
+                                <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                                    <span style="font-size:0.85rem;color:var(--text-muted);">Outside CI</span>
+                                    <span style="font-family:'JetBrains Mono',monospace;color:{{ '#ef4444' if results['timeseries']['white_noise_test']['acf_test']['outside_ratio']|float > 0.1 else '#22c55e' }};">{{ results['timeseries']['white_noise_test']['acf_test']['outside_count'] }}/{{ results['timeseries']['white_noise_test']['acf_test']['nlags']-1 }}</span>
+                                </div>
+                                <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                                    <span style="font-size:0.85rem;color:var(--text-muted);">Ratio</span>
+                                    <span style="font-family:'JetBrains Mono',monospace;">{{ (results['timeseries']['white_noise_test']['acf_test']['outside_ratio']|float * 100)|round(1) }}%</span>
+                                </div>
+                                <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:8px;">{{ results['timeseries']['white_noise_test']['acf_test']['interpretation'] }}</div>
+                            </div>
+
+                            <div style="padding:18px;background:var(--glass);border-radius:14px;border:1px solid var(--border);">
+                                <div style="font-family:'Cinzel',serif;font-size:0.9rem;color:var(--accent);margin-bottom:10px;">Variance Stationarity</div>
+                                <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                                    <span style="font-size:0.85rem;color:var(--text-muted);">Ratio</span>
+                                    <span style="font-family:'JetBrains Mono',monospace;color:{{ '#ef4444' if results['timeseries']['white_noise_test']['variance_stationarity']['variance_ratio']|float > 10 else '#22c55e' }};">{{ results['timeseries']['white_noise_test']['variance_stationarity']['variance_ratio']|float|round(2) }}</span>
+                                </div>
+                                <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:8px;">{{ results['timeseries']['white_noise_test']['variance_stationarity']['interpretation'] }}</div>
+                            </div>
+
+                            <div style="padding:18px;background:var(--glass);border-radius:14px;border:1px solid var(--border);">
+                                <div style="font-family:'Cinzel',serif;font-size:0.9rem;color:var(--accent);margin-bottom:10px;">Runs Test</div>
+                                <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                                    <span style="font-size:0.85rem;color:var(--text-muted);">Z-statistic</span>
+                                    <span style="font-family:'JetBrains Mono',monospace;">{{ results['timeseries']['white_noise_test']['runs_test']['statistic']|float|round(4) }}</span>
+                                </div>
+                                <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                                    <span style="font-size:0.85rem;color:var(--text-muted);">p-value</span>
+                                    <span style="font-family:'JetBrains Mono',monospace;color:{{ '#22c55e' if results['timeseries']['white_noise_test']['runs_test']['p_value']|float > 0.05 else '#ef4444' }};">{{ results['timeseries']['white_noise_test']['runs_test']['p_value']|float|round(4) }}</span>
+                                </div>
+                                <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:8px;">{{ results['timeseries']['white_noise_test']['runs_test']['interpretation'] }}</div>
+                            </div>
+                        </div>
+                    </section>
                     {% endif %}
-                {% endfor %}
-            </div>
-        </div>
 
-        <!-- Prediction Results -->
-        <div class="section" id="sec-pred">
-            <h2 class="sec-title"><i class="fas fa-brain"></i> MODEL PREDICTION RESULTS</h2>
+                    <!-- Visualizations -->
+                    <section class="content-panel" id="sec-viz">
+                        <h2 class="panel-title"><i class="fas fa-image"></i> VISUALIZATION</h2>
+                        <div class="plots-grid">
+                            {% if plot_urls.get('waveform') %}
+                            <div class="plot-box">
+                                <div class="plot-caption"><i class="fas fa-wave-square"></i> Waveform</div>
+                                <img src="{{ plot_urls.waveform }}" alt="Waveform">
+                            </div>
+                            {% endif %}
 
-            {% if plot_urls.get('prediction_comparison') %}
-            <div class="plot-box" style="margin-bottom: 24px;">
-                <div class="plot-caption"><i class="fas fa-chart-area"></i> Prediction Comparison</div>
-                <img src="{{ plot_urls.prediction_comparison }}" alt="Prediction Comparison" loading="lazy">
-            </div>
-            {% endif %}
+                            {% if plot_urls.get('fft_spectrum') %}
+                            <div class="plot-box">
+                                <div class="plot-caption"><i class="fas fa-chart-bar"></i> FFT Spectrum</div>
+                                <img src="{{ plot_urls.fft_spectrum }}" alt="FFT">
+                            </div>
+                            {% endif %}
 
-            {% if plot_urls.get('error_comparison') %}
-            <div class="plot-box" style="margin-bottom: 24px;">
-                <div class="plot-caption"><i class="fas fa-exclamation-triangle"></i> Error Comparison</div>
-                <img src="{{ plot_urls.error_comparison }}" alt="Error Comparison" loading="lazy">
-            </div>
-            {% endif %}
+                            {% if plot_urls.get('stft_spectrogram') %}
+                            <div class="plot-box">
+                                <div class="plot-caption"><i class="fas fa-th"></i> STFT Spectrogram</div>
+                                <img src="{{ plot_urls.stft_spectrogram }}" alt="STFT">
+                            </div>
+                            {% endif %}
 
-            <table class="tbl">
-                <thead><tr><th>MODEL</th><th>RMSE</th><th>MAE</th><th>MSE</th></tr></thead>
-                <tbody>
-                    {% for model, prediction_data in results['predictions'].items() %}
-                    <tr>
-                        <td><span class="model-name">{{ model }}</span></td>
-                        <td><span class="metric-num">{{ prediction_data[1].get('RMSE', 'N/A')|round(4) if not prediction_data[1].get('RMSE') != prediction_data[1].get('RMSE') else 'N/A' }}</span></td>
-                        <td><span class="metric-num">{{ prediction_data[1].get('MAE', 'N/A')|round(4) if not prediction_data[1].get('MAE') != prediction_data[1].get('MAE') else 'N/A' }}</span></td>
-                        <td><span class="metric-num">{{ prediction_data[1].get('MSE', 'N/A')|round(4) if not prediction_data[1].get('MSE') != prediction_data[1].get('MSE') else 'N/A' }}</span></td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+                            {% if plot_urls.get('mel_spectrogram') %}
+                            <div class="plot-box">
+                                <div class="plot-caption"><i class="fas fa-th"></i> Mel Spectrogram</div>
+                                <img src="{{ plot_urls.mel_spectrogram }}" alt="Mel">
+                            </div>
+                            {% endif %}
 
-        <!-- Band Analysis -->
-        <div class="section" id="sec-band">
-            <h2 class="sec-title"><i class="fas fa-broadcast-tower"></i> FREQUENCY BAND PREDICTABILITY</h2>
+                            {% if plot_urls.get('mfcc') %}
+                            <div class="plot-box">
+                                <div class="plot-caption"><i class="fas fa-compact-disc"></i> MFCC Heatmap</div>
+                                <img src="{{ plot_urls.mfcc }}" alt="MFCC">
+                            </div>
+                            {% endif %}
 
-            {% if plot_urls.get('band_errors') %}
-            <div class="plot-box" style="margin-bottom: 24px;">
-                <div class="plot-caption"><i class="fas fa-fire"></i> Band Error Distribution</div>
-                <img src="{{ plot_urls.band_errors }}" alt="Band Errors" loading="lazy">
-            </div>
-            {% endif %}
+                            {% if plot_urls.get('acf_pacf') %}
+                            <div class="plot-box">
+                                <div class="plot-caption"><i class="fas fa-chart-line"></i> ACF / PACF</div>
+                                <img src="{{ plot_urls.acf_pacf }}" alt="ACF PACF">
+                            </div>
+                            {% endif %}
 
-            <div class="band-grid">
-                {% for band, data in results['band_summary'].items() %}
-                <div class="band-card">
-                    <div class="band-head">
-                        <span class="band-name">{{ data['name'] }}</span>
-                        <span class="band-badge">RMSE: {{ 'N/A' if data['avg_rmse'] != data['avg_rmse'] else data['avg_rmse']|float|round(4) }}</span>
-                    </div>
-                    <div class="band-row"><span class="band-k">Best Model:</span><span class="band-v">{{ data['best_model'] or 'N/A' }}</span></div>
-                    <div class="band-row"><span class="band-k">Average MAE:</span><span class="band-v">{{ 'N/A' if data['avg_mae'] != data['avg_mae'] else data['avg_mae']|float|round(4) }}</span></div>
-                    
-                    {% if results.get('band_results') and results['band_results'].get(band) %}
-                    <details class="band-details">
-                        <summary class="band-details-summary">View Details</summary>
-                        <div class="band-details-content">
-                            {% for model_name, model_data in results['band_results'][band]['predictions'].items() %}
-                            <div class="model-detail">
-                                <strong>{{ model_name }}</strong>:
-                                {% if model_data['metrics'].get('error') %}
-                                <span class="error-text">Error: {{ model_data['metrics']['error'][:80] }}...</span>
-                                {% else %}
-                                RMSE: {{ 'N/A' if model_data['metrics'].get('RMSE') != model_data['metrics'].get('RMSE') else model_data['metrics']['RMSE']|float|round(4) }},
-                                MAE: {{ 'N/A' if model_data['metrics'].get('MAE') != model_data['metrics'].get('MAE') else model_data['metrics']['MAE']|float|round(4) }}
+                            {% if plot_urls.get('periodicity') %}
+                            <div class="plot-box">
+                                <div class="plot-caption"><i class="fas fa-wave-square"></i> Periodicity</div>
+                                <img src="{{ plot_urls.periodicity }}" alt="Periodicity">
+                            </div>
+                            {% endif %}
+
+                            {% for key, url in plot_urls.items() %}
+                                {% if key not in ['waveform', 'fft_spectrum', 'stft_spectrogram', 'mel_spectrogram', 'mfcc', 'acf_pacf', 'periodicity', 'prediction_comparison', 'error_comparison', 'band_errors', 'band_error_bars']
+                                      and not key.startswith('dynamics/')
+                                      and not key.startswith('volatility/')
+                                      and not key.startswith('discovery/') %}
+                                <div class="plot-box">
+                                    <div class="plot-caption"><i class="fas fa-image"></i> {{ key.replace('_', ' ').title() }}</div>
+                                    <img src="{{ url }}" alt="{{ key }}">
+                                </div>
                                 {% endif %}
+                            {% endfor %}
+                        </div>
+                    </section>
+
+                    <!-- Prediction Results -->
+                    <section class="content-panel" id="sec-pred">
+                        <h2 class="panel-title"><i class="fas fa-brain"></i> MODEL PREDICTION RESULTS</h2>
+
+                        {% if plot_urls.get('prediction_comparison') %}
+                        <div class="plot-box full-width">
+                            <div class="plot-caption"><i class="fas fa-chart-area"></i> Prediction Comparison</div>
+                            <img src="{{ plot_urls.prediction_comparison }}" alt="Prediction">
+                        </div>
+                        {% endif %}
+
+                        {% if plot_urls.get('error_comparison') %}
+                        <div class="plot-box full-width" style="margin-top: 16px;">
+                            <div class="plot-caption"><i class="fas fa-exclamation-triangle"></i> Error Comparison</div>
+                            <img src="{{ plot_urls.error_comparison }}" alt="Error">
+                        </div>
+                        {% endif %}
+
+                        <table class="tbl">
+                            <thead><tr><th>MODEL</th><th>RMSE</th><th>MAE</th><th>MSE</th></tr></thead>
+                            <tbody>
+                                {% for model, prediction_data in results['predictions'].items() %}
+                                <tr>
+                                    <td><span class="model-name">{{ model }}</span></td>
+                                    <td><span class="metric-num">{{ prediction_data[1].get('RMSE', 'N/A')|round(4) if not prediction_data[1].get('RMSE') != prediction_data[1].get('RMSE') else 'N/A' }}</span></td>
+                                    <td><span class="metric-num">{{ prediction_data[1].get('MAE', 'N/A')|round(4) if not prediction_data[1].get('MAE') != prediction_data[1].get('MAE') else 'N/A' }}</span></td>
+                                    <td><span class="metric-num">{{ prediction_data[1].get('MSE', 'N/A')|round(4) if not prediction_data[1].get('MSE') != prediction_data[1].get('MSE') else 'N/A' }}</span></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </section>
+
+                    <!-- Band Analysis -->
+                    <section class="content-panel" id="sec-band">
+                        <h2 class="panel-title"><i class="fas fa-broadcast-tower"></i> FREQUENCY BAND PREDICTABILITY</h2>
+
+                        {% if plot_urls.get('band_errors') %}
+                        <div class="plot-box full-width">
+                            <div class="plot-caption"><i class="fas fa-fire"></i> Band Error Distribution</div>
+                            <img src="{{ plot_urls.band_errors }}" alt="Band Errors">
+                        </div>
+                        {% endif %}
+
+                        <div class="band-grid">
+                            {% for band, data in results['band_summary'].items() %}
+                            <div class="band-card">
+                                <div class="band-head">
+                                    <span class="band-name">{{ data['name'] }}</span>
+                                    <span class="band-badge">RMSE: {{ 'N/A' if data['avg_rmse'] != data['avg_rmse'] else data['avg_rmse']|float|round(4) }}</span>
+                                </div>
+                                <div class="band-row"><span class="band-k">Best Model:</span><span class="band-v">{{ data['best_model'] or 'N/A' }}</span></div>
+                                <div class="band-row"><span class="band-k">Average MAE:</span><span class="band-v">{{ 'N/A' if data['avg_mae'] != data['avg_mae'] else data['avg_mae']|float|round(4) }}</span></div>
                             </div>
                             {% endfor %}
                         </div>
-                    </details>
+
+                        {% if results.get('predictability_rank') %}
+                        <h3 style="font-family:'Cinzel',serif;font-size:0.95rem;color:var(--accent);letter-spacing:2px;margin-top:24px;display:flex;align-items:center;gap:10px;">
+                            <i class="fas fa-trophy"></i> PREDICTABILITY RANKING
+                        </h3>
+                        <ol class="rank-list">
+                            {% for item in results['predictability_rank'] %}
+                            <li>
+                                <span class="rank-n">{{ loop.index }}</span>
+                                <div class="rank-info">
+                                    <div class="rank-band-name">{{ item['band'] }}</div>
+                                    <div class="rank-detail">Best: {{ item['best_model'] or 'N/A' }}</div>
+                                </div>
+                                <span class="rank-rmse">{{ 'N/A' if item['avg_rmse'] != item['avg_rmse'] else item['avg_rmse']|float|round(4) }}</span>
+                            </li>
+                            {% endfor %}
+                        </ol>
+                        {% endif %}
+                    </section>
+
+                    <!-- Dynamics Analysis -->
+                    {% if results.get('dynamics') %}
+                    <section class="content-panel" id="sec-dynamics">
+                        <h2 class="panel-title"><i class="fas fa-chart-area"></i> AUDIO DYNAMICS ANALYSIS</h2>
+
+                        {% if plot_urls.get('dynamics/trends') %}
+                        <div class="plot-box full-width">
+                            <div class="plot-caption"><i class="fas fa-line-chart"></i> Trend Dynamics</div>
+                            <img src="{{ plot_urls['dynamics/trends'] }}" alt="Dynamics Trends">
+                        </div>
+                        {% endif %}
+
+                        {% if plot_urls.get('dynamics/summary') %}
+                        <div class="plot-box full-width" style="margin-top: 16px;">
+                            <div class="plot-caption"><i class="fas fa-pie-chart"></i> Dynamics Summary</div>
+                            <img src="{{ plot_urls['dynamics/summary'] }}" alt="Dynamics Summary">
+                        </div>
+                        {% endif %}
+                    </section>
                     {% endif %}
-                </div>
-                {% endfor %}
-            </div>
 
-            {% if results.get('predictability_rank') %}
-            <h3 style="font-family:'Cinzel',serif;font-size:1rem;color:var(--accent);letter-spacing:2px;margin-top:32px;display:flex;align-items:center;gap:10px;">
-                <i class="fas fa-trophy"></i> PREDICTABILITY RANKING
-            </h3>
-            <ol class="rank-list">
-                {% for item in results['predictability_rank'] %}
-                <li>
-                    <span class="rank-n">{{ loop.index }}</span>
-                    <div class="rank-info">
-                        <div class="rank-band-name">{{ item['band'] }}</div>
-                        <div class="rank-detail">Best Model: {{ item['best_model'] or 'N/A' }}</div>
-                    </div>
-                    <span class="rank-rmse">{{ 'N/A' if item['avg_rmse'] != item['avg_rmse'] else item['avg_rmse']|float|round(4) }}</span>
-                </li>
-                {% endfor %}
-            </ol>
-            {% endif %}
-        </div>
+                    <!-- Volatility Analysis -->
+                    {% if results.get('volatility') %}
+                    <section class="content-panel" id="sec-volatility">
+                        <h2 class="panel-title"><i class="fas fa-chart-line"></i> VOLATILITY ANALYSIS</h2>
 
-        <!-- Dynamics Analysis -->
-        {% if results.get('dynamics') %}
-        <div class="section" id="sec-dynamics">
-            <h2 class="sec-title"><i class="fas fa-wave-square"></i> AUDIO DYNAMICS ANALYSIS</h2>
-            
-            {% if plot_urls.get('dynamics/trends') %}
-            <div class="plot-box" style="margin-bottom: 24px;">
-                <div class="plot-caption"><i class="fas fa-line-chart"></i> Trend Dynamics</div>
-                <img src="{{ plot_urls['dynamics/trends'] }}" alt="Dynamics Trends" loading="lazy">
-            </div>
-            {% endif %}
+                        {% if plot_urls.get('volatility/volatility_layer') %}
+                        <div class="plot-box full-width">
+                            <div class="plot-caption"><i class="fas fa-layer-group"></i> Volatility Layer</div>
+                            <img src="{{ plot_urls['volatility/volatility_layer'] }}" alt="Volatility">
+                        </div>
+                        {% endif %}
 
-            {% if plot_urls.get('dynamics/summary') %}
-            <div class="plot-box" style="margin-bottom: 24px;">
-                <div class="plot-caption"><i class="fas fa-pie-chart"></i> Dynamics Summary</div>
-                <img src="{{ plot_urls['dynamics/summary'] }}" alt="Dynamics Summary" loading="lazy">
-            </div>
-            {% endif %}
+                        {% if plot_urls.get('volatility/garch_energy') %}
+                        <div class="plot-box" style="margin-top: 16px;">
+                            <div class="plot-caption"><i class="fas fa-cogs"></i> GARCH Diagnostics</div>
+                            <img src="{{ plot_urls['volatility/garch_energy'] }}" alt="GARCH">
+                        </div>
+                        {% endif %}
 
-            {% if results.get('dynamics_summary') %}
-            <div class="data-grid">
-                {% for trend_key in ['energy', 'brightness', 'complexity', 'rhythm'] %}
-                {% if results['dynamics_summary'].get(trend_key) %}
-                <div class="data-cell">
-                    <div class="data-key">{{ trend_key|capitalize }} Trend</div>
-                    <div class="data-val">{{ results['dynamics_summary'][trend_key].get('trend_direction', 'N/A')|upper }}</div>
-                </div>
-                <div class="data-cell">
-                    <div class="data-key">{{ trend_key|capitalize }} Mean</div>
-                    <div class="data-val">{{ results['dynamics_summary'][trend_key].get('mean', 0)|float|round(4) }}</div>
-                </div>
-                <div class="data-cell">
-                    <div class="data-key">{{ trend_key|capitalize }} Std</div>
-                    <div class="data-val">{{ results['dynamics_summary'][trend_key].get('std', 0)|float|round(4) }}</div>
-                </div>
-                <div class="data-cell">
-                    <div class="data-key">{{ trend_key|capitalize }} Peaks</div>
-                    <div class="data-val">{{ results['dynamics_summary'][trend_key].get('n_peaks', 0) }}</div>
-                </div>
-                {% endif %}
-                {% endfor %}
-            </div>
-            {% endif %}
-        </div>
-        {% endif %}
+                        {% if plot_urls.get('volatility/dynamics_analysis_summary') %}
+                        <div class="plot-box" style="margin-top: 16px;">
+                            <div class="plot-caption"><i class="fas fa-tachometer-alt"></i> Analysis Summary</div>
+                            <img src="{{ plot_urls['volatility/dynamics_analysis_summary'] }}" alt="Summary">
+                        </div>
+                        {% endif %}
 
-        <!-- Volatility Analysis -->
-        {% if results.get('volatility') %}
-        <div class="section" id="sec-volatility">
-            <h2 class="sec-title"><i class="fas fa-chart-line"></i> VOLATILITY ANALYSIS</h2>
-            
-            {% if plot_urls.get('volatility/volatility_layer') %}
-            <div class="plot-box" style="margin-bottom: 24px;">
-                <div class="plot-caption"><i class="fas fa-layer-group"></i> Volatility Layer</div>
-                <img src="{{ plot_urls['volatility/volatility_layer'] }}" alt="Volatility Layer" loading="lazy">
-            </div>
-            {% endif %}
-
-            {% if plot_urls.get('volatility/garch_energy') %}
-            <div class="plot-box" style="margin-bottom: 24px;">
-                <div class="plot-caption"><i class="fas fa-cogs"></i> GARCH Diagnostics</div>
-                <img src="{{ plot_urls['volatility/garch_energy'] }}" alt="GARCH Diagnostics" loading="lazy">
-            </div>
-            {% endif %}
-
-            {% if plot_urls.get('volatility/dynamics_analysis_summary') %}
-            <div class="plot-box" style="margin-bottom: 24px;">
-                <div class="plot-caption"><i class="fas fa-tachometer-alt"></i> Analysis Summary</div>
-                <img src="{{ plot_urls['volatility/dynamics_analysis_summary'] }}" alt="Dynamics Analysis Summary" loading="lazy">
-            </div>
-            {% endif %}
-
-            {% if plot_urls.get('volatility/volatility_comparison') %}
-            <div class="plot-box" style="margin-bottom: 24px;">
-                <div class="plot-caption"><i class="fas fa-balance-scale"></i> Volatility Comparison</div>
-                <img src="{{ plot_urls['volatility/volatility_comparison'] }}" alt="Volatility Comparison" loading="lazy">
-            </div>
-            {% endif %}
-
-            {% if results.get('volatility_summary') %}
-            <div class="data-grid">
-                {% for trend_key in ['energy', 'brightness', 'complexity', 'rhythm'] %}
-                {% if results['volatility_summary'].get(trend_key) %}
-                <div class="data-cell">
-                    <div class="data-key">{{ trend_key|capitalize }} Volatility</div>
-                    <div class="data-val">{{ results['volatility_summary'][trend_key].get('mean_vol', 0)|float|round(5) }}</div>
-                </div>
-                <div class="data-cell">
-                    <div class="data-key">{{ trend_key|capitalize }} Regime</div>
-                    <div class="data-val">{{ results['volatility_summary'][trend_key].get('volatility_regime', 'N/A') }}</div>
-                </div>
-                {% endif %}
-                {% endfor %}
-            </div>
-            {% endif %}
-        </div>
-        {% endif %}
-
-        <!-- Discovery Analysis -->
-        {% if results.get('discovery') %}
-        <div class="section" id="sec-discovery">
-            <h2 class="sec-title"><i class="fas fa-search"></i> AUDIO DISCOVERY</h2>
-            
-            <div class="data-grid">
-                {% if results['discovery'].get('title') %}
-                <div class="data-cell">
-                    <div class="data-key">Discovery Type</div>
-                    <div class="data-val">{{ results['discovery']['title'] }}</div>
-                </div>
-                {% endif %}
-                {% if results['discovery'].get('summary') %}
-                <div class="data-cell">
-                    <div class="data-key">Summary</div>
-                    <div class="data-val">{{ results['discovery']['summary'][:100] }}...</div>
-                </div>
-                {% endif %}
-                {% if results['discovery'].get('n_matches') %}
-                <div class="data-cell">
-                    <div class="data-key">Matches Found</div>
-                    <div class="data-val">{{ results['discovery']['n_matches'] }}</div>
-                </div>
-                {% endif %}
-                {% if results['discovery'].get('avg_confidence') %}
-                <div class="data-cell">
-                    <div class="data-key">Avg Confidence</div>
-                    <div class="data-val">{{ results['discovery']['avg_confidence']|float|round(2) }}</div>
-                </div>
-                {% endif %}
-            </div>
-
-            {% for plot_key in plot_urls %}
-            {% if 'discovery/' in plot_key %}
-            <div class="plot-box" style="margin-bottom: 24px;">
-                <div class="plot-caption"><i class="fas fa-image"></i> {{ plot_key.split('/')[-1] }}</div>
-                <img src="{{ plot_urls[plot_key] }}" alt="{{ plot_key }}" loading="lazy">
-            </div>
-            {% endif %}
-            {% endfor %}
-        </div>
-        {% endif %}
-
-        <!-- Model Analysis -->
-        {% if results.get('model_analysis') %}
-        <div class="section" id="sec-models">
-            <h2 class="sec-title"><i class="fas fa-brain"></i> MODEL STRUCTURE ANALYSIS</h2>
-            
-            <div class="data-grid">
-                {% if results['model_analysis'].get('ensemble_summary') %}
-                <div class="data-cell" style="grid-column: 1 / -1;">
-                    <div class="data-key">Ensemble Summary</div>
-                    <div class="data-val">{{ results['model_analysis']['ensemble_summary'] }}</div>
-                </div>
-                {% endif %}
-
-                {% if results['model_analysis'].get('arima_summary') %}
-                <div class="data-cell">
-                    <div class="data-key">ARIMA Summary</div>
-                    <div class="data-val">{{ results['model_analysis']['arima_summary'][:150] }}...</div>
-                </div>
-                {% endif %}
-
-                {% if results['model_analysis'].get('hmm_summary') %}
-                <div class="data-cell">
-                    <div class="data-key">HMM Summary</div>
-                    <div class="data-val">{{ results['model_analysis']['hmm_summary'][:150] }}...</div>
-                </div>
-                {% endif %}
-
-                {% if results['model_analysis'].get('lstm_summary') %}
-                <div class="data-cell">
-                    <div class="data-key">LSTM Summary</div>
-                    <div class="data-val">{{ results['model_analysis']['lstm_summary'][:150] }}...</div>
-                </div>
-                {% endif %}
-
-                {% if results['model_analysis'].get('transformer_summary') %}
-                <div class="data-cell">
-                    <div class="data-key">Transformer Summary</div>
-                    <div class="data-val">{{ results['model_analysis']['transformer_summary'][:150] }}...</div>
-                </div>
-                {% endif %}
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- Analysis Log -->
-        <div class="section" id="sec-log">
-            <h2 class="sec-title"><i class="fas fa-terminal"></i> ANALYSIS LOG</h2>
-            <div class="log-container">
-                <div class="log-content" id="logContent">
-                    {% if results.get('analysis_log') %}
-                    {% for log_entry in results['analysis_log'] %}
-                    <div class="log-entry {% if 'error' in log_entry|lower or 'failed' in log_entry|lower %}log-error{% elif 'warning' in log_entry|lower %}log-warning{% elif 'complete' in log_entry|lower or 'done' in log_entry|lower %}log-success{% endif %}">
-                        {{ log_entry }}
-                    </div>
-                    {% endfor %}
-                    {% else %}
-                    <div class="log-entry log-info">Analysis completed. No detailed log available.</div>
+                        {% if plot_urls.get('volatility/volatility_comparison') %}
+                        <div class="plot-box full-width" style="margin-top: 16px;">
+                            <div class="plot-caption"><i class="fas fa-balance-scale"></i> Volatility Comparison</div>
+                            <img src="{{ plot_urls['volatility/volatility_comparison'] }}" alt="Comparison">
+                        </div>
+                        {% endif %}
+                    </section>
                     {% endif %}
-                </div>
-                <button class="log-download-btn" onclick="downloadLog()">
-                    <i class="fas fa-download"></i> Download Log
-                </button>
-            </div>
-        </div>
 
+                    <!-- Discovery Analysis -->
+                    {% if results.get('discovery') %}
+                    <section class="content-panel" id="sec-discovery">
+                        <h2 class="panel-title"><i class="fas fa-search"></i> AUDIO DISCOVERY</h2>
+
+                        {% for plot_key in plot_urls %}
+                        {% if 'discovery/' in plot_key %}
+                        <div class="plot-box full-width" style="margin-bottom: 16px;">
+                            <div class="plot-caption"><i class="fas fa-image"></i> {{ plot_key.split('/')[-1] }}</div>
+                            <img src="{{ plot_urls[plot_key] }}" alt="{{ plot_key }}">
+                        </div>
+                        {% endif %}
+                        {% endfor %}
+                    </section>
+                    {% endif %}
+
+                    <!-- Model Analysis -->
+                    {% if results.get('model_analysis') %}
+                    <section class="content-panel" id="sec-models">
+                        <h2 class="panel-title"><i class="fas fa-project-diagram"></i> MODEL STRUCTURE ANALYSIS</h2>
+                        <div class="data-grid">
+                            {% if results['model_analysis'].get('ensemble_summary') %}
+                            <div class="data-cell" style="grid-column: 1 / -1;">
+                                <div class="data-key">Ensemble Summary</div>
+                                <div class="data-val">{{ results['model_analysis']['ensemble_summary'] }}</div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </section>
+                    {% endif %}
+
+                    <!-- Analysis Log (Terminal Style) -->
+                    <section class="content-panel" id="sec-log">
+                        <h2 class="panel-title"><i class="fas fa-terminal"></i> ANALYSIS LOG</h2>
+                        <div class="log-container">
+                            <div class="log-header">
+                                <span class="log-header-dot red"></span>
+                                <span class="log-header-dot yellow"></span>
+                                <span class="log-header-dot green"></span>
+                                <span class="log-header-title">TERMINAL OUTPUT</span>
+                            </div>
+                            <div class="log-content" id="logContent">
+                                {% if results.get('analysis_log') %}
+                                {% for log_entry in results['analysis_log'] %}
+                                {% set entry_class = '' %}
+                                {% if 'error' in log_entry|lower or 'failed' in log_entry|lower %}
+                                {% set entry_class = 'error' %}
+                                {% elif 'warning' in log_entry|lower %}
+                                {% set entry_class = 'warning' %}
+                                {% elif 'complete' in log_entry|lower or 'done' in log_entry|lower %}
+                                {% set entry_class = 'success' %}
+                                {% elif 'phase' in log_entry|lower %}
+                                {% set entry_class = 'phase' %}
+                                {% elif '=' in log_entry and log_entry|trim %}
+                                {% set entry_class = 'divider' %}
+                                {% endif %}
+                                {% if '=' in log_entry and log_entry|trim and log_entry|trim != '' %}
+                                <div class="log-entry divider">
+                                    <span class="log-ts">{{ log_entry[1:9] if log_entry.startswith('[') else '--:--:--' }}</span>
+                                    <span class="log-msg">{{ log_entry }}</span>
+                                </div>
+                                {% else %}
+                                <div class="log-entry {{ entry_class }}">
+                                    <span class="log-ts">{{ log_entry[1:9] if log_entry.startswith('[') else '--:--:--' }}</span>
+                                    <span class="log-msg">{{ log_entry }}</span>
+                                </div>
+                                {% endif %}
+                                {% endfor %}
+                                {% else %}
+                                <div class="log-entry info">
+                                    <span class="log-ts">--:--:--</span>
+                                    <span class="log-msg">Analysis completed. No detailed log available.</span>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </section>
+                </main>
+            </div>
+
+            <footer class="footer">
+                <p><strong>AUDIO LAB</strong> — Time Series Analysis System &nbsp;|&nbsp; Task {{ task_id }}</p>
+            </footer>
+        </div>
     </div>
 
-    <!-- Footer -->
-    <footer class="footer">
-        <p><strong>AUDIO LAB</strong> — Time Series Analysis System &nbsp;|&nbsp; Powered by Python & Flask</p>
-    </footer>
-
-    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
     <script>
-        // ---- Theme Toggle ----
-        function toggleTheme() {
-            const b = document.body;
-            b.getAttribute('data-theme') === 'light'
-                ? (b.removeAttribute('data-theme'), localStorage.setItem('audiolab_theme','dark'))
-                : (b.setAttribute('data-theme','light'), localStorage.setItem('audiolab_theme','light'));
+        // Theme Toggle
+        const themeToggle = document.querySelector('.theme-toggle');
+        const body = document.body;
+
+        function setTheme(theme) {
+            if (theme === 'light') {
+                body.setAttribute('data-theme', 'light');
+            } else {
+                body.removeAttribute('data-theme');
+            }
+            localStorage.setItem('audiolab_theme', theme);
         }
-        const saved = localStorage.getItem('audiolab_theme');
-        if (saved === 'light') { document.body.setAttribute('data-theme','light'); document.getElementById('themeToggle').checked = true; }
 
-        // ---- Scroll Reveal ----
-        const obs = new IntersectionObserver((entries) => {
-            entries.forEach((entry, idx) => {
-                if (entry.isIntersecting) {
-                    setTimeout(() => entry.target.classList.add('visible'), idx * 80);
-                    obs.unobserve(entry.target);
-                }
-            });
-        }, { threshold: 0.1 });
-
-        document.querySelectorAll('.section, .stat-card').forEach(el => {
-            el.style.transition = `all 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275)`;
-            obs.observe(el);
+        themeToggle.addEventListener('click', () => {
+            const next = body.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+            setTheme(next);
         });
 
-        // ---- Page State ----
-        async function loadHistory() {
-            const container = document.getElementById('historyList');
-            const countBadge = document.getElementById('historyCount');
-            try {
-                const response = await fetch('/results/history');
-                if (!response.ok) throw new Error('无法获取历史记录');
-                const history = await response.json();
-                countBadge.textContent = `${history.length} Reports`;
+        const savedTheme = localStorage.getItem('audiolab_theme');
+        if (savedTheme) setTheme(savedTheme);
 
-                if (!history.length) {
-                    container.innerHTML = '<div class="history-loading">未找到历史报告。</div>';
-                    return;
+        // Active Nav Link
+        const navLinks = document.querySelectorAll('.nav-link');
+        const sections = document.querySelectorAll('section[id], .content-panel[id]');
+
+        window.addEventListener('scroll', () => {
+            let current = '';
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop - 100;
+                if (scrollY >= sectionTop) {
+                    current = section.getAttribute('id');
                 }
+            });
+            navLinks.forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href') === '#' + current) {
+                    link.classList.add('active');
+                }
+            });
+        });
 
-                container.innerHTML = history.map(item => {
-                    const name = item.audio1_name || item.task_id;
-                    const labels = item.analysis_options ? item.analysis_options.join(', ') : '默认选项';
-                    return `
-                        <a class="history-item" href="/results/${item.task_id}">
-                            <div>
-                                <strong>${name}</strong>
-                                <span>${item.created_at} · ${labels}</span>
-                            </div>
-                            <div class="history-badge">${item.task_id}</div>
-                        </a>
-                    `;
-                }).join('');
+        // Experiment Naming (Server-side)
+        const taskId = '{{ task_id }}';
+        const expNameInput = document.getElementById('expNameInput');
+        const savedExperimentsDiv = document.getElementById('savedExperiments');
+
+        async function loadSavedExperiments() {
+            try {
+                const response = await fetch('/api/experiments');
+                const saved = await response.json();
+                savedExperimentsDiv.innerHTML = saved.map((exp, idx) => `
+                    <div class="saved-exp-item" onclick="loadExperiment('${exp.task_id}')">
+                        <span class="saved-exp-name">${exp.name}</span>
+                        <div class="saved-exp-actions">
+                            <button class="saved-exp-btn load" onclick="event.stopPropagation(); loadExperiment('${exp.task_id}')">
+                                <i class="fas fa-folder-open"></i>
+                            </button>
+                            <button class="saved-exp-btn delete" onclick="event.stopPropagation(); deleteExperiment('${exp.name}')">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
             } catch (error) {
-                countBadge.textContent = 'Error';
-                container.innerHTML = `<div class="history-loading">读取历史报告失败：${error.message}</div>`;
+                console.error('Failed to load experiments:', error);
+            }
+        }
+
+        async function saveExperiment() {
+            const name = expNameInput.value.trim();
+            if (!name) {
+                alert('Please enter an experiment name');
+                return;
+            }
+            try {
+                const response = await fetch('/api/experiments', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, task_id: taskId })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    expNameInput.value = '';
+                    loadSavedExperiments();
+                }
+            } catch (error) {
+                console.error('Failed to save experiment:', error);
+                alert('Failed to save experiment');
+            }
+        }
+
+        function loadExperiment(expTaskId) {
+            window.location.href = '/results/' + expTaskId;
+        }
+
+        async function deleteExperiment(name) {
+            if (!confirm(`Delete experiment "${name}"?`)) return;
+            try {
+                const response = await fetch('/api/experiments/' + encodeURIComponent(name), {
+                    method: 'DELETE'
+                });
+                const result = await response.json();
+                if (result.success) {
+                    loadSavedExperiments();
+                }
+            } catch (error) {
+                console.error('Failed to delete experiment:', error);
             }
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            loadHistory();
+            loadSavedExperiments();
         });
-
-        // ---- Download Log ----
-        function downloadLog() {
-            const logContent = document.getElementById('logContent');
-            const entries = logContent.querySelectorAll('.log-entry');
-            let logText = '=== Audio Lab Analysis Log ===\n';
-            logText += 'Generated: ' + new Date().toISOString() + '\n';
-            logText += 'Task ID: {{ task_id }}\n';
-            logText += '================================\n\n';
-            
-            entries.forEach(entry => {
-                logText += entry.textContent.trim() + '\n';
-            });
-
-            const blob = new Blob([logText], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'analysis_log_{{ task_id }}.txt';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }
     </script>
 </body>
 </html>

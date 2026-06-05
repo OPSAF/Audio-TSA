@@ -848,16 +848,17 @@ def results_history():
                 try:
                     with open(task_info_file, 'r', encoding='utf-8') as f:
                         info = json.load(f)
-                    entry['experiment_name'] = info.get('experiment_name') or info.get('audio1_name') or info.get('filepath1_name', 'Unknown')
+                    entry['experiment_name'] = info.get('experiment_name') or None
                     entry['audio1_name'] = info.get('audio1_name', info.get('filepath1_name', 'Unknown'))
                     entry['analysis_options'] = info.get('analysis_options', [])
                     entry['forecast_horizon'] = info.get('forecast_horizon')
                 except Exception:
-                    entry['experiment_name'] = 'Unknown'
+                    entry['experiment_name'] = None
                     entry['audio1_name'] = 'Unknown'
                     entry['analysis_options'] = []
                     entry['forecast_horizon'] = None
             else:
+                entry['experiment_name'] = None
                 entry['audio1_name'] = 'Unknown'
                 entry['analysis_options'] = []
                 entry['forecast_horizon'] = None
@@ -897,6 +898,85 @@ def secure_filename(filename):
     return re.sub(r'[^a-zA-Z0-9_\-\.]', '_', filename)
 
 
+# ============================================
+# Experiment Naming API
+# ============================================
+EXPERIMENTS_FILE = 'experiments.json'
+
+def load_experiments():
+    """Load experiments from JSON file."""
+    if os.path.exists(EXPERIMENTS_FILE):
+        try:
+            with open(EXPERIMENTS_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            return []
+    return []
+
+def save_experiments(experiments):
+    """Save experiments to JSON file."""
+    with open(EXPERIMENTS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(experiments, f, ensure_ascii=False, indent=2)
+
+@app.route('/api/experiments')
+def get_experiments():
+    """Get all saved experiments."""
+    experiments = load_experiments()
+    return jsonify(experiments)
+
+@app.route('/api/experiments', methods=['POST'])
+def save_experiment():
+    """Save an experiment with a name."""
+    data = request.get_json()
+    name = data.get('name', '').strip()
+    task_id = data.get('task_id', '').strip()
+
+    if not name or not task_id:
+        return jsonify({'error': 'Name and task_id are required'}), 400
+
+    experiments = load_experiments()
+
+    # Check if experiment with same name exists, update it
+    for exp in experiments:
+        if exp['name'] == name:
+            exp['task_id'] = task_id
+            exp['updated_at'] = time.strftime('%Y-%m-%d %H:%M:%S')
+            save_experiments(experiments)
+            return jsonify({'success': True, 'message': 'Experiment updated'})
+
+    # Add new experiment
+    experiments.append({
+        'name': name,
+        'task_id': task_id,
+        'created_at': time.strftime('%Y-%m-%d %H:%M:%S'),
+        'updated_at': time.strftime('%Y-%m-%d %H:%M:%S')
+    })
+    save_experiments(experiments)
+    return jsonify({'success': True, 'message': 'Experiment saved'})
+
+@app.route('/api/experiments/<name>', methods=['DELETE'])
+def delete_experiment(name):
+    """Delete an experiment by name."""
+    experiments = load_experiments()
+    original_len = len(experiments)
+    experiments = [e for e in experiments if e['name'] != name]
+
+    if len(experiments) == original_len:
+        return jsonify({'error': 'Experiment not found'}), 404
+
+    save_experiments(experiments)
+    return jsonify({'success': True, 'message': 'Experiment deleted'})
+
+@app.route('/api/experiments/<name>')
+def get_experiment(name):
+    """Get an experiment by name."""
+    experiments = load_experiments()
+    for exp in experiments:
+        if exp['name'] == name:
+            return jsonify(exp)
+    return jsonify({'error': 'Experiment not found'}), 404
+
+
 @app.route('/docs')
 @app.route('/docs/')
 @app.route('/docs/<page>')
@@ -911,21 +991,38 @@ def docs(page=None):
         'guide': 'guide.md',
         'theory': 'theory.md',
         'analysis': 'analysis.md',
+        'models': 'models.md',
         'results': 'results.md',
+        'faq': 'faq.md',
+        'genre': 'genre.md',
     }
 
     if page is None:
         # Docs index page
-        md_content = """# Audio Lab 文档
+        md_content = """# Audio Lab 文档中心
 
-欢迎阅读 Audio Lab 音频分析平台文档。请选择以下章节：
+欢迎阅读 **Audio Lab** 音频时间序列分析平台文档。本平台集成了经典时间序列分析方法与现代深度学习技术，为音频信号分析提供全方位解决方案。
 
-| 文档 | 内容 |
-|------|------|
-| [**使用指南**](/docs/guide) | Web 界面操作说明、各分析选项详解 |
-| [**理论基础**](/docs/theory) | 从声波振动到数字信号处理的教学讲解 |
-| [**分析模块详解**](/docs/analysis) | 每个分析模块的算法、输入输出、原理 |
-| [**结果解读**](/docs/results) | 如何看懂图表和分析输出 |
+## 📚 文档目录
+
+| 文档 | 内容概述 |
+|------|----------|
+| [**使用指南**](/docs/guide) | Web 界面操作说明、命令行参数、各分析选项详解 |
+| [**理论基础**](/docs/theory) | 从声波振动到数字信号处理的教学讲解，包含数学公式推导 |
+| [**分析模块详解**](/docs/analysis) | 每个分析模块的算法原理、输入输出、实现细节 |
+| [**深度学习模型**](/docs/models) | LSTM、Transformer等深度学习模型的架构、训练策略、数据划分 |
+| [**结果解读**](/docs/results) | 如何看懂图表、统计指标、白噪声检验结果 |
+| [**常见问题 FAQ**](/docs/faq) | 常见问题解答、故障排除、最佳实践 |
+| [**音乐风格分析**](/docs/genre) | GTZAN数据集音乐风格分类分析报告（预留） |
+
+## 🎯 平台特色
+
+- **多模型集成**：ARIMA、HMM、LSTM、Transformer 四大模型协同预测
+- **频带分析**：按频率带分析可预测性，揭示音频内在结构
+- **动态特征**：能量、亮度、复杂度、节奏等多维度动态分析
+- **波动率建模**：GARCH模型捕捉音频波动特性
+- **白噪声检验**：6种统计检验综合判断信号随机性
+- **可视化报告**：自动生成高质量分析图表
 
 ---
 
@@ -968,7 +1065,10 @@ def docs(page=None):
         'guide': '使用指南',
         'theory': '理论基础',
         'analysis': '分析模块详解',
+        'models': '深度学习模型',
         'results': '结果解读',
+        'faq': '常见问题 FAQ',
+        'genre': '音乐风格分析',
     }
 
     title = titles.get(page, page)

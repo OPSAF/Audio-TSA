@@ -301,6 +301,11 @@ Example:
         results['timeseries']['spectral_flatness'] = flatness
         print(f"      Spectral flatness: {flatness:.4f} (0=tonal, 1=noise)")
 
+        print("[2.5] White noise testing...")
+        white_noise_results = analysis.test_white_noise(waveform_for_ts[:min(len(waveform_for_ts), sr * 2)])
+        results['timeseries']['white_noise_test'] = white_noise_results
+        analysis.print_white_noise_report(white_noise_results)
+
         if 'features' in analysis_options:
             mel_mean = np.mean(results['features']['mel']['spec'], axis=0)
             _, mel_acf, _ = analysis.compute_acf(mel_mean, nlags=40)
