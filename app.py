@@ -8,6 +8,8 @@ import time
 import threading
 import numpy as np
 from queue import Queue
+from io import StringIO
+from contextlib import redirect_stdout, redirect_stderr
 from flask import Flask, render_template, request, redirect, url_for, Response, stream_with_context, jsonify
 
 # Import our audio analysis package
@@ -61,6 +63,28 @@ def parse_analysis_options(form_data, has_dual_audio):
                 selected.append(opt['id'])
     
     return selected
+
+
+class ProgressWriter:
+    """Capture stdout/stderr and send printed text into the task log."""
+    def __init__(self, task_id, level='info'):
+        self.task_id = task_id
+        self.level = level
+        self._buffer = ''
+
+    def write(self, text):
+        if not text:
+            return
+        self._buffer += text
+        while '\n' in self._buffer:
+            line, self._buffer = self._buffer.split('\n', 1)
+            if line.strip():
+                log_progress(self.task_id, line.strip(), level=self.level)
+
+    def flush(self):
+        if self._buffer.strip():
+            log_progress(self.task_id, self._buffer.strip(), level=self.level)
+            self._buffer = ''
 
 
 def log_progress(task_id, message, level='info'):
@@ -465,6 +489,7 @@ def index():
         # Store task info for async processing
         task_info = {
             'task_id': task_id,
+            'experiment_name': request.form.get('experiment_name', '').strip() or None,
             'filepath1': filepath1,
             'filepath1_name': os.path.basename(filepath1),
             'filepath2': filepath2,
@@ -505,14 +530,17 @@ def stream(task_id):
         # Run analysis in a separate thread
         def run_analysis():
             try:
-                results = analyze_audio_with_progress(
-                    task_id,
-                    task_info['filepath1'],
-                    task_info.get('filepath2'),
-                    task_info['forecast_horizon'],
-                    task_info['n_mels'],
-                    task_info['analysis_options']
-                )
+                stdout_logger = ProgressWriter(task_id)
+                stderr_logger = ProgressWriter(task_id, level='error')
+                with redirect_stdout(stdout_logger), redirect_stderr(stderr_logger):
+                    results = analyze_audio_with_progress(
+                        task_id,
+                        task_info['filepath1'],
+                        task_info.get('filepath2'),
+                        task_info['forecast_horizon'],
+                        task_info['n_mels'],
+                        task_info['analysis_options']
+                    )
                 
                 # Generate plots if visualization is enabled
                 plot_files = []
@@ -670,12 +698,14 @@ def stream(task_id):
                 results['task_id'] = task_id
                 results['plot_files'] = plot_files
                 results['params'] = {
+                    'experiment_name': task_info.get('experiment_name'),
                     'forecast_horizon': task_info['forecast_horizon'],
                     'n_mels': task_info['n_mels'],
                     'audio1_name': os.path.basename(task_info['filepath1']),
                     'audio2_name': os.path.basename(task_info['filepath2']) if task_info.get('filepath2') else None,
                     'analysis_options': task_info['analysis_options']
                 }
+                results['experiment_name'] = task_info.get('experiment_name') or ''
                 
                 # Save results
                 serializable = {k: v for k, v in results.items()
@@ -747,6 +777,7 @@ def stream(task_id):
                         f"[{log['time']}] {log['message']}"
                         for log in analysis_progress[task_id]['logs']
                     ]
+                serializable['experiment_name'] = task_info.get('experiment_name') or ''
 
                 with open(os.path.join(output_dir, 'results.json'), 'w', encoding='utf-8') as f:
                     json.dump(serializable, f, default=str, ensure_ascii=False)
@@ -817,10 +848,12 @@ def results_history():
                 try:
                     with open(task_info_file, 'r', encoding='utf-8') as f:
                         info = json.load(f)
+                    entry['experiment_name'] = info.get('experiment_name') or info.get('audio1_name') or info.get('filepath1_name', 'Unknown')
                     entry['audio1_name'] = info.get('audio1_name', info.get('filepath1_name', 'Unknown'))
                     entry['analysis_options'] = info.get('analysis_options', [])
                     entry['forecast_horizon'] = info.get('forecast_horizon')
                 except Exception:
+                    entry['experiment_name'] = 'Unknown'
                     entry['audio1_name'] = 'Unknown'
                     entry['analysis_options'] = []
                     entry['forecast_horizon'] = None
@@ -898,7 +931,15 @@ def docs(page=None):
 
 返回 [主页](/) | [项目 GitHub](https://github.com/OPSAF/Audio-TSA)
 """
-        html = markdown.markdown(md_content, extensions=['tables', 'fenced_code'])
+        html = markdown.markdown(
+            md_content,
+            extensions=[
+                'markdown.extensions.tables',
+                'markdown.extensions.fenced_code',
+                'markdown.extensions.codehilite'
+            ],
+            output_format='html5'
+        )
         if request.args.get('ajax') == '1':
             return jsonify({'title': '文档', 'content': html, 'page': 'index'})
         return render_template('docs.html', content=html, title='文档', page='index')
@@ -913,7 +954,15 @@ def docs(page=None):
     with open(filepath, 'r', encoding='utf-8') as f:
         md_content = f.read()
 
-    html = markdown.markdown(md_content, extensions=['tables', 'fenced_code', 'codehilite'])
+    html = markdown.markdown(
+        md_content,
+        extensions=[
+            'markdown.extensions.tables',
+            'markdown.extensions.fenced_code',
+            'markdown.extensions.codehilite'
+        ],
+        output_format='html5'
+    )
 
     titles = {
         'guide': '使用指南',

@@ -356,6 +356,31 @@
             box-shadow: 0 16px 36px rgba(255, 107, 0, 0.28);
         }
 
+        .hero-history-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 28px;
+            font-size: 0.95rem;
+            color: var(--accent);
+            background: transparent;
+            border: 2px solid var(--border-hover);
+            border-radius: 999px;
+            text-decoration: none;
+            cursor: pointer;
+            box-shadow: none;
+            transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            opacity: 0;
+            animation: heroFadeSlideUp 0.8s ease-out 0.85s forwards;
+        }
+
+        .hero-history-btn:hover {
+            transform: translateY(-2px);
+            border-color: var(--accent);
+            background: var(--accent-soft);
+            box-shadow: 0 12px 30px rgba(255, 107, 0, 0.15);
+        }
+
         @keyframes heroFadeSlideUp {
             from { opacity: 0; transform: translateY(40px); }
             to { opacity: 1; transform: translateY(0); }
@@ -755,6 +780,189 @@
         }
 
         /* ============================================
+           HISTORY MODAL
+           ============================================ */
+        .history-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 100001;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .history-modal.active {
+            display: flex;
+            opacity: 1;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .history-modal-content {
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            box-shadow: var(--card-shadow);
+            max-width: 600px;
+            width: 100%;
+            max-height: 80vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            animation: slideUp 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes slideUp {
+            from { transform: translateY(40px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .history-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 28px 32px;
+            border-bottom: 1px solid var(--border);
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+
+        .history-modal-header h2 {
+            font-family: 'Cinzel', serif;
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 0;
+        }
+
+        .history-modal-header h2 i {
+            color: var(--accent);
+            font-size: 1.3rem;
+        }
+
+        .history-modal-close {
+            width: 40px;
+            height: 40px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .history-modal-close:hover {
+            color: var(--accent);
+            background: var(--accent-soft);
+        }
+
+        .history-modal-body {
+            padding: 24px 32px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .history-modal-body::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .history-modal-body::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
+        }
+
+        .history-item-link {
+            display: block;
+            padding: 18px 20px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 14px;
+            margin-bottom: 12px;
+            text-decoration: none;
+            color: var(--text-primary);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+        }
+
+        .history-item-link:hover {
+            border-color: var(--border-hover);
+            background: var(--accent-soft);
+            transform: translateX(4px);
+            box-shadow: 0 6px 24px var(--accent-glow);
+        }
+
+        .history-item-name {
+            font-weight: 600;
+            font-size: 0.95rem;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .history-item-meta {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .history-item-time {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .history-item-id {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-family: 'JetBrains Mono', monospace;
+            padding: 2px 8px;
+            background: var(--accent-soft);
+            color: var(--accent);
+            border-radius: 6px;
+        }
+
+        .history-loading {
+            text-align: center;
+            padding: 40px 24px;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .history-empty {
+            text-align: center;
+            padding: 60px 24px;
+            color: var(--text-muted);
+        }
+
+        .history-empty i {
+            font-size: 3rem;
+            color: var(--border);
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        /* ============================================
            FEATURES — 功能特性卡片区
            ============================================ */
         .features-section {
@@ -963,7 +1171,10 @@
                 融合特征提取、时序分析、无监督模式发现与机器学习预测，
                 为音频信号提供全链路深度洞察。
             </p>
-            <a href="/docs" class="hero-docs-btn"><i class="fas fa-book-open"></i> 阅读使用手册</a>
+            <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;">
+                <a href="/docs" class="hero-docs-btn"><i class="fas fa-book-open"></i> 阅读使用手册</a>
+                <button type="button" class="hero-history-btn" onclick="openHistoryModal()"><i class="fas fa-history"></i> 查看历史报告</button>
+            </div>
         </div>
 
         <div class="scroll-hint" onclick="document.querySelector('.main-section').scrollIntoView({behavior:'smooth'})">
@@ -1127,9 +1338,92 @@
         </div>
     </div>
 
+    <!-- History Modal -->
+    <div class="history-modal" id="historyModal">
+        <div class="history-modal-content">
+            <div class="history-modal-header">
+                <h2><i class="fas fa-history"></i> 历史分析报告</h2>
+                <button type="button" class="history-modal-close" onclick="closeHistoryModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="history-modal-body" id="historyModalBody">
+                <div class="history-loading"><i class="fas fa-spinner fa-spin"></i> 加载中...</div>
+            </div>
+        </div>
+    </div>
+
     <!-- ============================== SCRIPTS ============================== -->
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
     <script>
+        // ---- History Modal Functions ----
+        function openHistoryModal() {
+            const modal = document.getElementById('historyModal');
+            const body = document.getElementById('historyModalBody');
+            modal.classList.add('active');
+            loadHistoryReports();
+        }
+
+        function closeHistoryModal() {
+            const modal = document.getElementById('historyModal');
+            modal.classList.remove('active');
+        }
+
+        async function loadHistoryReports() {
+            const body = document.getElementById('historyModalBody');
+            try {
+                const response = await fetch('/results/history');
+                if (!response.ok) throw new Error('Failed to fetch history');
+                const history = await response.json();
+
+                if (!history || history.length === 0) {
+                    body.innerHTML = `
+                        <div class="history-empty">
+                            <i class="fas fa-inbox"></i>
+                            <p>暂无历史报告</p>
+                            <p style="font-size:0.85rem;margin-top:10px;">完成一次分析后，历史记录将显示在这里</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                body.innerHTML = history.map(item => `
+                    <a href="/results/${item.task_id}" class="history-item-link">
+                        <div class="history-item-name">
+                            <i class="fas fa-file-audio"></i>
+                            ${item.audio1_name || 'Unknown'}
+                        </div>
+                        <div class="history-item-meta">
+                            <span class="history-item-time">
+                                <i class="fas fa-clock"></i>
+                                ${item.created_at || 'N/A'}
+                            </span>
+                            <span class="history-item-id">
+                                <i class="fas fa-tag"></i>
+                                ${item.task_id}
+                            </span>
+                        </div>
+                    </a>
+                `).join('');
+            } catch (error) {
+                body.innerHTML = `
+                    <div class="history-empty">
+                        <i class="fas fa-exclamation-circle" style="color:#ff4757;"></i>
+                        <p>无法加载历史报告</p>
+                        <p style="font-size:0.85rem;margin-top:10px;color:var(--text-muted);">错误: ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // Close modal when clicking outside
+        document.addEventListener('DOMContentLoaded', function() {
+            const modal = document.getElementById('historyModal');
+            modal.addEventListener('click', function(e) {
+                if (e.target === modal) {
+                    closeHistoryModal();
+                }
+            });
+        });
+
         // ---- Theme Toggle ----
         function toggleTheme() {
             const body = document.body;

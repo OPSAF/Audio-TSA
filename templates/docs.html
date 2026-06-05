@@ -351,6 +351,18 @@
             .theme-toggle { right: 16px; top: 16px; }
         }
     </style>
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']]
+            },
+            options: {
+                skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+            }
+        };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
 </head>
 <body data-theme="dark">
     <button class="theme-toggle" type="button" aria-label="切换主题">
@@ -460,6 +472,9 @@
                 docContent.innerHTML = data.content;
                 document.title = `${data.title} — Audio Lab 文档`;
                 setActiveLink(data.page || 'index');
+                if (window.MathJax && window.MathJax.typesetPromise) {
+                    window.MathJax.typesetPromise([docContent]).catch(() => {});
+                }
                 fadeTarget.style.opacity = '1';
                 fadeTarget.style.transform = 'translateY(0)';
             }, 180);
