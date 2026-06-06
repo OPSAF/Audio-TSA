@@ -86,7 +86,7 @@ DEFAULT_HMM_STATES = 5
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Phase A — Per-file analysis (shared pipeline)
+# Phase A — Per-file analysis (shared pipeline + per-file plots)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def run_per_file_analysis(
@@ -120,6 +120,37 @@ def run_per_file_analysis(
     )
 
     return results
+
+
+def generate_per_file_plots(
+    raw_results: dict,
+    filepath: str,
+    output_dir: str,
+    forecast_horizon: int = DEFAULT_FORECAST_HORIZON,
+    n_mels: int = DEFAULT_N_MELS,
+) -> List[str]:
+    """
+    Generate the same rich set of per-file plots that app/main produce,
+    using the shared pipeline's generate_all_plots function.
+    """
+    import matplotlib
+    matplotlib.use("Agg")
+    # Use larger default figure size
+    matplotlib.rcParams["figure.figsize"] = (10, 6)
+    matplotlib.rcParams["figure.dpi"] = 150
+
+    y1 = raw_results.get("_y1")
+    sr = raw_results.get("_sr", DEFAULT_SAMPLE_RATE)
+    y2 = raw_results.get("_y2")
+
+    if y1 is None:
+        return []
+
+    plot_files = generate_all_plots(
+        raw_results, output_dir,
+        y1=y1, sr=sr, y2=y2,
+    )
+    return plot_files
 
 
 def _safe_serialize_results(results: dict, task_id: str,
@@ -698,9 +729,10 @@ def run_batch(
     for i, fp in enumerate(audio_files):
         fname = os.path.splitext(os.path.basename(fp))[0]
         out_path = os.path.join(per_file_dir, f"{fname}_results.json")
+        fig_dir = os.path.join(per_file_dir, fname)
 
         # Resume check
-        if resume and os.path.exists(out_path):
+        if resume and os.path.exists(out_path) and os.path.exists(fig_dir):
             try:
                 with open(out_path, "r", encoding="utf-8") as fh:
                     per_file_results[fname] = json.load(fh)
@@ -715,6 +747,12 @@ def run_batch(
         try:
             raw = run_per_file_analysis(fp, forecast_horizon=forecast_horizon,
                                          n_mels=n_mels, fast=fast)
+
+            # ── Generate per-file plots (same rich output as app/main) ──
+            per_fig_files = generate_per_file_plots(
+                raw, fp, fig_dir, forecast_horizon=forecast_horizon, n_mels=n_mels,
+            )
+
             # Serialize with pipeline helper
             serialized = _safe_serialize_results(raw, task_id=fname, task_info={
                 "experiment_name": fname,
@@ -723,13 +761,15 @@ def run_batch(
                 "audio1_name": os.path.basename(fp),
                 "analysis_options": raw.get("analysis_options", []),
             })
+            serialized["per_file_plots"] = per_fig_files
 
             with open(out_path, "w", encoding="utf-8") as fh:
                 json.dump(serialized, fh, default=str, ensure_ascii=False)
 
             per_file_results[fname] = serialized
             elapsed = time.time() - t_start
-            print(f"  [{i+1:4d}/{len(audio_files)}] OK  {elapsed:5.1f}s  {os.path.basename(fp)}")
+            print(f"  [{i+1:4d}/{len(audio_files)}] OK  {elapsed:5.1f}s  "
+                  f"({len(per_fig_files)} plots)  {os.path.basename(fp)}")
 
         except Exception as exc:
             elapsed = time.time() - t_start
