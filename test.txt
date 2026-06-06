@@ -1,0 +1,1 @@
+& "C:\Users\27862\anaconda3\envs\P\python.exe" main.py --audio1 "C:\Users\27862\Documents\trae_projects\YTSA\T\alexzavesa-calm-inspiring-technology-logo-short-version-518993.mp3" --audio2 "C:\Users\27862\Documents\trae_projects\YTSA\T\alexzavesa-calm-elegant-logo-519008.mp3"

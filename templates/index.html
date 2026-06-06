@@ -1,0 +1,1619 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Lab — 音频时间序列分析系统</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* ============================================
+           CSS VARIABLES — 双主题色系
+           ============================================ */
+        :root {
+            /* 暗黑模式（默认） */
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #121218;
+            --bg-tertiary: #1a1a24;
+            --bg-elevated: rgba(26, 26, 36, 0.7);
+            --text-primary: #f0f0f5;
+            --text-secondary: rgba(240, 240, 245, 0.55);
+            --text-muted: rgba(240, 240, 245, 0.35);
+            --accent: #FF6B00;
+            --accent-light: #ff8c33;
+            --accent-dark: #cc5500;
+            --accent-glow: rgba(255, 107, 0, 0.25);
+            --accent-soft: rgba(255, 107, 0, 0.08);
+            --border: rgba(255, 107, 0, 0.12);
+            --border-hover: rgba(255, 107, 0, 0.35);
+            --glass-bg: rgba(18, 18, 24, 0.6);
+            --glass-border: rgba(255, 255, 255, 0.06);
+            --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            --card-shadow: 0 4px 24px rgba(0, 0, 0, 0.3), 0 0 60px var(--accent-glow);
+            --hero-gradient: linear-gradient(160deg, #0a0a0f 0%, #121218 40%, #0d0815 100%);
+            --noise-opacity: 0.03;
+        }
+
+        [data-theme="light"] {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8f9fc;
+            --bg-tertiary: #eef0f6;
+            --bg-elevated: rgba(255, 255, 255, 0.8);
+            --text-primary: #1a1a28;
+            --text-secondary: rgba(26, 26, 40, 0.55);
+            --text-muted: rgba(26, 26, 40, 0.35);
+            --accent: #FF2A55;
+            --accent-light: #ff4d73;
+            --accent-dark: #cc2244;
+            --accent-glow: rgba(255, 42, 85, 0.15);
+            --accent-soft: rgba(255, 42, 85, 0.06);
+            --border: rgba(255, 42, 85, 0.12);
+            --border-hover: rgba(255, 42, 85, 0.35);
+            --glass-bg: rgba(255, 255, 255, 0.65);
+            --glass-border: rgba(0, 0, 0, 0.06);
+            --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+            --card-shadow: 0 4px 24px rgba(0, 0, 0, 0.06), 0 0 60px var(--accent-glow);
+            --hero-gradient: linear-gradient(160deg, #ffffff 0%, #f0f2f8 40%, #fafbff 100%);
+            --noise-opacity: 0.02;
+        }
+
+        /* ============================================
+           RESET & BASE
+           ============================================ */
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow-x: hidden;
+            min-height: 100vh;
+            transition: background 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+                        color 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+            pointer-events: none;
+            z-index: 99999;
+            opacity: var(--noise-opacity);
+        }
+
+        ::selection {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        /* ============================================
+           THEME TOGGLE — 优雅切换按钮
+           ============================================ */
+        .theme-switcher {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            z-index: 100000;
+            width: 56px;
+            height: 30px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+            position: relative;
+            outline: none;
+            appearance: none;
+            -webkit-appearance: none;
+        }
+
+        .theme-switcher {
+            background: var(--bg-tertiary);
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.2),
+                        0 0 0 2px var(--border);
+        }
+
+        .theme-switcher::after {
+            content: '';
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent), var(--accent-light));
+            transition: transform 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+            box-shadow: 0 2px 10px var(--accent-glow);
+        }
+
+        [data-theme="light"] .theme-switcher::after {
+            transform: translateX(26px);
+        }
+
+        .theme-switcher:hover {
+            transform: scale(1.05);
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.2),
+                        0 0 0 2px var(--accent),
+                        0 0 20px var(--accent-glow);
+        }
+
+        .theme-label {
+            position: fixed;
+            top: 58px;
+            right: 16px;
+            z-index: 100000;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            transition: color 0.4s;
+            pointer-events: none;
+        }
+
+        /* ============================================
+           HERO SECTION — 大厂游戏官网风格
+           ============================================ */
+        .hero {
+            position: relative;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            background: var(--hero-gradient);
+            transition: background 0.6s ease;
+        }
+
+        /* 背景光球 */
+        .hero-orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(120px);
+            opacity: 0;
+            animation: orbFadeIn 2s ease-out forwards;
+        }
+
+        @keyframes orbFadeIn { to { opacity: 1; } }
+
+        .hero-orb--1 {
+            width: 600px; height: 600px;
+            background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+            top: -10%; right: -5%;
+            animation-delay: 0.2s;
+        }
+        .hero-orb--2 {
+            width: 400px; height: 400px;
+            background: radial-gradient(circle, rgba(140, 80, 255, 0.12) 0%, transparent 70%);
+            bottom: 10%; left: -5%;
+            animation-delay: 0.6s;
+        }
+        .hero-orb--3 {
+            width: 300px; height: 300px;
+            background: radial-gradient(circle, var(--accent-soft) 0%, transparent 70%);
+            top: 50%; left: 45%;
+            animation-delay: 1s;
+        }
+
+        /* 网格线背景 */
+        .hero-grid {
+            position: absolute;
+            inset: 0;
+            background-image:
+                linear-gradient(var(--border) 1px, transparent 1px),
+                linear-gradient(90deg, var(--border) 1px, transparent 1px);
+            background-size: 80px 80px;
+            mask-image: radial-gradient(ellipse at center, black 30%, transparent 70%);
+            -webkit-mask-image: radial-gradient(ellipse at center, black 30%, transparent 70%);
+            opacity: 0.4;
+        }
+
+        /* 波纹线条 */
+        .hero-waves {
+            position: absolute;
+            inset: 0;
+            overflow: hidden;
+        }
+        .hero-wave-line {
+            position: absolute;
+            width: 150%; height: 1px;
+            left: -25%;
+            background: linear-gradient(90deg, transparent, var(--accent), var(--accent-light), var(--accent), transparent);
+            opacity: 0.15;
+            animation: waveDrift 6s infinite linear;
+        }
+        .hero-wave-line:nth-child(1) { top: 25%; animation-duration: 7s; }
+        .hero-wave-line:nth-child(2) { top: 50%; animation-duration: 9s; animation-delay: 1.5s; opacity: 0.1; }
+        .hero-wave-line:nth-child(3) { top: 75%; animation-duration: 8s; animation-delay: 3s; opacity: 0.12; }
+
+        @keyframes waveDrift {
+            from { transform: translateX(-40%); }
+            to { transform: translateX(40%); }
+        }
+
+        /* 主内容区 */
+        .hero-content {
+            position: relative;
+            z-index: 10;
+            text-align: center;
+            padding: 40px 24px;
+            max-width: 800px;
+        }
+
+        /* 艺术字大标题 */
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 20px;
+            border-radius: 30px;
+            background: var(--accent-soft);
+            border: 1px solid var(--border);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--accent);
+            margin-bottom: 36px;
+            opacity: 0;
+            animation: heroFadeSlideUp 0.8s ease-out 0.3s forwards;
+        }
+
+        .hero-badge i { font-size: 0.7rem; }
+
+        .hero-title {
+            font-family: 'Cinzel', serif;
+            font-size: clamp(3rem, 9vw, 7rem);
+            font-weight: 900;
+            line-height: 1.05;
+            letter-spacing: -0.02em;
+            margin-bottom: 24px;
+            opacity: 0;
+            animation: heroFadeSlideUp 0.9s ease-out 0.5s forwards;
+        }
+
+        .hero-title .line {
+            display: block;
+        }
+
+        .hero-title .line--main {
+            background: linear-gradient(
+                135deg,
+                var(--accent) 0%,
+                var(--accent-light) 35%,
+                #ffa366 65%,
+                var(--accent) 100%
+            );
+            background-size: 250% auto;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: titleShimmer 5s linear infinite;
+            filter: drop-shadow(0 0 40px var(--accent-glow));
+        }
+
+        [data-theme="light"] .hero-title .line--main {
+            background: linear-gradient(
+                135deg,
+                var(--accent) 0%,
+                var(--accent-light) 35%,
+                #ff8899 65%,
+                var(--accent) 100%
+            );
+            background-size: 250% auto;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        @keyframes titleShimmer {
+            to { background-position: 250% center; }
+        }
+
+        .hero-title .line--sub {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 300;
+            font-size: 0.38em;
+            letter-spacing: 0.25em;
+            color: var(--text-secondary);
+            margin-top: 12px;
+            -webkit-text-fill-color: initial;
+            background: none;
+            filter: none;
+        }
+
+        .hero-desc {
+            font-family: 'Outfit', sans-serif;
+            font-size: clamp(1rem, 2vw, 1.25rem);
+            font-weight: 300;
+            color: var(--text-secondary);
+            line-height: 1.7;
+            max-width: 550px;
+            margin: 0 auto 48px;
+            opacity: 0;
+            animation: heroFadeSlideUp 0.8s ease-out 0.75s forwards;
+        }
+
+        .hero-docs-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 28px;
+            font-size: 0.95rem;
+            color: #fff;
+            background: linear-gradient(135deg, var(--accent), var(--accent-light));
+            border-radius: 999px;
+            text-decoration: none;
+            box-shadow: 0 12px 30px rgba(255, 107, 0, 0.22);
+            opacity: 0;
+            animation: heroFadeSlideUp 0.8s ease-out 0.8s forwards;
+        }
+
+        .hero-docs-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 16px 36px rgba(255, 107, 0, 0.28);
+        }
+
+        .hero-history-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 28px;
+            font-size: 0.95rem;
+            color: var(--accent);
+            background: transparent;
+            border: 2px solid var(--border-hover);
+            border-radius: 999px;
+            text-decoration: none;
+            cursor: pointer;
+            box-shadow: none;
+            transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            opacity: 0;
+            animation: heroFadeSlideUp 0.8s ease-out 0.85s forwards;
+        }
+
+        .hero-history-btn:hover {
+            transform: translateY(-2px);
+            border-color: var(--accent);
+            background: var(--accent-soft);
+            box-shadow: 0 12px 30px rgba(255, 107, 0, 0.15);
+        }
+
+        @keyframes heroFadeSlideUp {
+            from { opacity: 0; transform: translateY(40px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* 向下滚动指示器 */
+        .scroll-hint {
+            position: absolute;
+            bottom: 36px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            z-index: 10;
+            opacity: 0;
+            animation: heroFadeSlideUp 0.6s ease-out 1.2s forwards;
+        }
+
+        .scroll-hint span {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        .scroll-hint .mouse-icon {
+            width: 22px; height: 34px;
+            border: 2px solid var(--text-muted);
+            border-radius: 11px;
+            position: relative;
+        }
+
+        .scroll-hint .mouse-dot {
+            position: absolute;
+            top: 6px; left: 50%;
+            transform: translateX(-50%);
+            width: 3px; height: 6px;
+            background: var(--accent);
+            border-radius: 2px;
+            animation: mouseScroll 1.8s ease-in-out infinite;
+        }
+
+        @keyframes mouseScroll {
+            0%, 100% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            50% { opacity: 0.3; transform: translateX(-50%) translateY(10px); }
+        }
+
+        /* ============================================
+           MAIN SECTION — 上传与分析区域
+           ============================================ */
+        .main-section {
+            padding: 100px 24px 80px;
+            position: relative;
+            background: var(--bg-primary);
+            transition: background 0.6s ease;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 64px;
+        }
+
+        .section-tag {
+            display: inline-block;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            color: var(--accent);
+            padding-bottom: 14px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 20px;
+        }
+
+        .section-title {
+            font-family: 'Cinzel', serif;
+            font-size: clamp(1.8rem, 4vw, 2.8rem);
+            font-weight: 700;
+            color: var(--text-primary);
+            line-height: 1.2;
+        }
+
+        /* 毛玻璃上传卡片 */
+        .upload-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 48px;
+            box-shadow: var(--glass-shadow);
+            position: relative;
+            overflow: hidden;
+            transition: all 0.4s ease;
+        }
+
+        .upload-card:hover {
+            border-color: var(--border-hover);
+            box-shadow: var(--card-shadow);
+        }
+
+        .upload-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--accent), transparent);
+            opacity: 0.5;
+        }
+
+        /* 表单标签 */
+        .form-group { margin-bottom: 28px; }
+
+        .form-label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            color: var(--text-primary);
+            margin-bottom: 14px;
+            letter-spacing: 0.5px;
+        }
+
+        .form-label i {
+            width: 28px; height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--accent-soft);
+            border-radius: 8px;
+            color: var(--accent);
+            font-size: 0.85rem;
+        }
+
+        /* 文件上传区域 */
+        .upload-zone {
+            border: 2px dashed var(--border);
+            border-radius: 16px;
+            padding: 36px 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            background: var(--accent-soft);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-zone:hover {
+            border-color: var(--accent);
+            border-style: solid;
+            background: var(--accent-glow);
+            transform: translateY(-2px);
+        }
+
+        .upload-zone input[type="file"] { display: none; }
+
+        .upload-zone-icon {
+            width: 64px; height: 64px;
+            margin: 0 auto 16px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-light));
+            border-radius: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .upload-zone:hover .upload-zone-icon {
+            transform: scale(1.1) rotate(-3deg);
+        }
+
+        .upload-zone-icon i {
+            font-size: 26px;
+            color: #fff;
+        }
+
+        .upload-zone-text {
+            font-size: 0.92rem;
+            color: var(--text-secondary);
+            transition: color 0.3s;
+        }
+
+        .upload-zone:hover .upload-zone-text {
+            color: var(--accent);
+        }
+
+        /* 参数面板 — 可折叠毛玻璃面板 */
+        .panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            margin-top: 24px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 18px 24px;
+            cursor: pointer;
+            user-select: none;
+            font-family: 'Cinzel', serif;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--accent);
+            letter-spacing: 1px;
+            transition: all 0.3s;
+        }
+
+        .panel-header:hover { color: var(--accent-light); }
+
+        .panel-header i {
+            font-size: 0.8rem;
+            transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .panel.collapsed .panel-header i {
+            transform: rotate(-90deg);
+        }
+
+        .panel-body {
+            padding: 0 24px 24px;
+            display: block;
+            transition: all 0.35s ease;
+        }
+
+        .panel.collapsed .panel-body {
+            display: none;
+        }
+
+        /* 输入框 */
+        .input-field {
+            width: 100%;
+            padding: 14px 18px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+            outline: none;
+        }
+
+        .input-field:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 4px var(--accent-glow);
+        }
+
+        .input-hint {
+            display: block;
+            margin-top: 6px;
+            font-size: 0.78rem;
+            color: var(--text-muted);
+        }
+
+        /* 分析选项网格 */
+        .options-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 10px;
+        }
+
+        .option-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 16px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            user-select: none;
+        }
+
+        .option-item:hover {
+            border-color: var(--border-hover);
+            background: var(--accent-soft);
+        }
+
+        .option-item.active {
+            border-color: var(--accent);
+            background: var(--accent-soft);
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+
+        .option-item.disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .option-item.disabled:hover {
+            border-color: var(--border);
+            background: var(--bg-primary);
+        }
+
+        .option-checkbox {
+            width: 22px; height: 22px;
+            border: 2px solid var(--border);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: all 0.3s ease;
+        }
+
+        .option-item.active .option-checkbox {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+
+        .option-checkbox i {
+            font-size: 11px;
+            color: #fff;
+            display: none;
+        }
+
+        .option-item.active .option-checkbox i { display: block; }
+
+        .option-name {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--text-primary);
+        }
+
+        .option-desc {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            margin-top: 1px;
+        }
+
+        /* 提交按钮 */
+        .submit-row {
+            text-align: center;
+            margin-top: 40px;
+        }
+
+        .btn-submit {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            padding: 18px 56px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-light));
+            color: #fff;
+            border: none;
+            border-radius: 50px;
+            font-family: 'Cinzel', serif;
+            font-size: 1.05rem;
+            font-weight: 700;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 8px 30px var(--accent-glow);
+        }
+
+        .btn-submit::before {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%;
+            width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent);
+            transition: left 0.6s ease;
+        }
+
+        .btn-submit:hover {
+            transform: translateY(-4px) scale(1.03);
+            box-shadow: 0 16px 48px var(--accent-glow), 0 0 80px var(--accent-glow);
+        }
+
+        .btn-submit:hover::before { left: 100%; }
+
+        .btn-submit:active { transform: translateY(-1px) scale(0.98); }
+
+        .submit-hint {
+            margin-top: 14px;
+            font-size: 0.82rem;
+            color: var(--text-muted);
+        }
+
+        /* ============================================
+           HISTORY MODAL
+           ============================================ */
+        .history-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 100001;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .history-modal.active {
+            display: flex;
+            opacity: 1;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .history-modal-content {
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            box-shadow: var(--card-shadow);
+            max-width: 600px;
+            width: 100%;
+            max-height: 80vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            animation: slideUp 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes slideUp {
+            from { transform: translateY(40px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .history-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 28px 32px;
+            border-bottom: 1px solid var(--border);
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+
+        .history-modal-header h2 {
+            font-family: 'Cinzel', serif;
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 0;
+        }
+
+        .history-modal-header h2 i {
+            color: var(--accent);
+            font-size: 1.3rem;
+        }
+
+        .history-modal-close {
+            width: 40px;
+            height: 40px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .history-modal-close:hover {
+            color: var(--accent);
+            background: var(--accent-soft);
+        }
+
+        .history-modal-body {
+            padding: 24px 32px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .history-modal-body::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .history-modal-body::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
+        }
+
+        .history-item-link {
+            display: block;
+            padding: 18px 20px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 14px;
+            margin-bottom: 12px;
+            text-decoration: none;
+            color: var(--text-primary);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+        }
+
+        .history-item-link:hover {
+            border-color: var(--border-hover);
+            background: var(--accent-soft);
+            transform: translateX(4px);
+            box-shadow: 0 6px 24px var(--accent-glow);
+        }
+
+        .history-item-name {
+            font-weight: 600;
+            font-size: 0.95rem;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .history-item-meta {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .history-item-time {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .history-item-id {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-family: 'JetBrains Mono', monospace;
+            padding: 2px 8px;
+            background: var(--accent-soft);
+            color: var(--accent);
+            border-radius: 6px;
+        }
+
+        .history-loading {
+            text-align: center;
+            padding: 40px 24px;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .history-empty {
+            text-align: center;
+            padding: 60px 24px;
+            color: var(--text-muted);
+        }
+
+        .history-empty i {
+            font-size: 3rem;
+            color: var(--border);
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        /* ============================================
+           FEATURES — 功能特性卡片区
+           ============================================ */
+        .features-section {
+            padding: 80px 24px 100px;
+            background: var(--bg-secondary);
+            transition: background 0.6s ease;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+            margin-top: 56px;
+        }
+
+        .feature-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 36px 32px;
+            text-align: center;
+            transition: all 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+            overflow: hidden;
+            opacity: 0;
+            transform: translateY(30px);
+        }
+
+        .feature-card.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--accent), transparent);
+            opacity: 0;
+            transition: opacity 0.4s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-8px);
+            border-color: var(--border-hover);
+            box-shadow: 0 20px 60px var(--card-shadow);
+        }
+
+        .feature-card:hover::before { opacity: 1; }
+
+        .feature-icon-wrap {
+            width: 68px; height: 68px;
+            margin: 0 auto 22px;
+            background: var(--accent-soft);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .feature-card:hover .feature-icon-wrap {
+            background: linear-gradient(135deg, var(--accent), var(--accent-light));
+            border-color: transparent;
+            transform: rotateY(180deg);
+        }
+
+        .feature-icon-wrap i {
+            font-size: 26px;
+            color: var(--accent);
+            transition: color 0.3s;
+        }
+
+        .feature-card:hover .feature-icon-wrap i { color: #fff; }
+
+        .feature-name {
+            font-family: 'Cinzel', serif;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 10px;
+            letter-spacing: 0.5px;
+        }
+
+        .feature-desc {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            line-height: 1.65;
+        }
+
+        /* ============================================
+           FOOTER
+           ============================================ */
+        .footer {
+            padding: 32px 24px;
+            text-align: center;
+            border-top: 1px solid var(--border);
+            background: var(--bg-secondary);
+            transition: background 0.6s ease;
+        }
+
+        .footer p {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            letter-spacing: 1px;
+        }
+
+        .footer strong {
+            color: var(--accent);
+            font-family: 'Cinzel', serif;
+            font-weight: 700;
+        }
+
+        /* ============================================
+           LOADING OVERLAY
+           ============================================ */
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(10, 10, 15, 0.92);
+            backdrop-filter: blur(12px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 99998;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.4s ease;
+        }
+
+        [data-theme="light"] .loading-overlay {
+            background: rgba(255, 255, 255, 0.92);
+        }
+
+        .loading-overlay.active { opacity: 1; visibility: visible; }
+
+        .loader-ring {
+            width: 64px; height: 64px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.9s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .loader-text {
+            margin-top: 20px;
+            font-family: 'Cinzel', serif;
+            font-size: 0.9rem;
+            color: var(--accent);
+            letter-spacing: 4px;
+            text-transform: uppercase;
+        }
+
+        /* ============================================
+           RESPONSIVE
+           ============================================ */
+        @media (max-width: 768px) {
+            .hero-title { font-size: clamp(2.2rem, 10vw, 4rem); }
+            .upload-card { padding: 28px 20px; }
+            .features-grid { grid-template-columns: 1fr; }
+            .options-grid { grid-template-columns: 1fr; }
+            .theme-switcher { top: 16px; right: 16px; width: 48px; height: 26px; }
+            .theme-switcher::after { width: 20px; height: 20px; }
+            [data-theme="light"] .theme-switcher::after { transform: translateX(22px); }
+            .theme-label { display: none; }
+            .section-header { margin-bottom: 40px; }
+            .main-section { padding: 60px 16px 50px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Theme Switcher -->
+    <input type="checkbox" class="theme-switcher" id="themeToggle" onclick="toggleTheme()">
+    <span class="theme-label">Dark Mode</span>
+
+    <!-- ============================== HERO ============================== -->
+    <section class="hero" id="hero">
+        <div class="hero-grid"></div>
+
+        <div class="hero-waves">
+            <div class="hero-wave-line"></div>
+            <div class="hero-wave-line"></div>
+            <div class="hero-wave-line"></div>
+        </div>
+
+        <div class="hero-orb hero-orb--1"></div>
+        <div class="hero-orb hero-orb--2"></div>
+        <div class="hero-orb hero-orb--3"></div>
+
+        <div class="hero-content">
+            <div class="hero-badge">
+                <i class="fas fa-bolt"></i> Audio Time Series Analysis Platform
+            </div>
+            <h1 class="hero-title">
+                <span class="line line--main">AUDIO LAB</span>
+                <span class="line line--sub">音频时间序列分析与预测平台</span>
+            </h1>
+            <p class="hero-desc">
+                融合特征提取、时序分析、无监督模式发现与机器学习预测，
+                为音频信号提供全链路深度洞察。
+            </p>
+            <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;">
+                <a href="/docs" class="hero-docs-btn"><i class="fas fa-book-open"></i> 阅读使用手册</a>
+                <button type="button" class="hero-history-btn" onclick="openHistoryModal()"><i class="fas fa-history"></i> 查看历史报告</button>
+            </div>
+        </div>
+
+        <div class="scroll-hint" onclick="document.querySelector('.main-section').scrollIntoView({behavior:'smooth'})">
+            <div class="mouse-icon"><div class="mouse-dot"></div></div>
+            <span>Scroll</span>
+        </div>
+    </section>
+
+    <!-- ============================== MAIN UPLOAD ============================== -->
+    <section class="main-section">
+        <div class="container">
+            <div class="section-header">
+                <div class="section-tag">Analysis Center</div>
+                <h2 class="section-title">开始分析</h2>
+            </div>
+
+            <div class="upload-card">
+                <form method="POST" enctype="multipart/form-data" id="analysisForm">
+
+                    <!-- 实验命名 -->
+                    <div class="form-group">
+                        <label class="form-label">
+                            <i class="fas fa-tag"></i> 实验名称（可选）
+                        </label>
+                        <input type="text" class="input-field" id="experiment_name"
+                               name="experiment_name" placeholder="为本次分析命名，便于历史记录查找...">
+                        <span class="input-hint">不填写则使用默认名称</span>
+                    </div>
+
+                    <!-- 主音频文件 -->
+                    <div class="form-group">
+                        <label class="form-label">
+                            <i class="fas fa-music"></i> 主音频文件
+                        </label>
+                        <div class="upload-zone" onclick="document.getElementById('audio1').click()" id="zone1">
+                            <div class="upload-zone-icon"><i class="fas fa-headphones-alt"></i></div>
+                            <p class="upload-zone-text" id="audio1-name">点击选择或拖拽音频文件到此处</p>
+                            <input type="file" id="audio1" name="audio1" accept=".wav,.mp3,.flac,.ogg"
+                                   onchange="updateFileName('audio1'); updateComparisonOption()">
+                        </div>
+                    </div>
+
+                    <!-- 副音频文件 -->
+                    <div class="form-group">
+                        <label class="form-label">
+                            <i class="fas fa-layer-group"></i> 副音频文件（可选）
+                        </label>
+                        <div class="upload-zone" onclick="document.getElementById('audio2').click()" id="zone2">
+                            <div class="upload-zone-icon"><i class="fas fa-wave-square"></i></div>
+                            <p class="upload-zone-text" id="audio2-name">可选，上传后启用双音频对比分析</p>
+                            <input type="file" id="audio2" name="audio2" accept=".wav,.mp3,.flac,.ogg"
+                                   onchange="updateFileName('audio2'); updateComparisonOption()">
+                        </div>
+                    </div>
+
+                    <!-- 参数设置面板 -->
+                    <div class="panel" id="paramsPanel">
+                        <div class="panel-header" onclick="togglePanel('paramsPanel')">
+                            <i class="fas fa-sliders-h"></i> 参数设置
+                        </div>
+                        <div class="panel-body">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px;">
+                                <div>
+                                    <label class="form-label" style="font-size: 0.88rem;">预测步长</label>
+                                    <input type="number" class="input-field" id="forecast_horizon"
+                                           name="forecast_horizon" value="20" min="5" max="100">
+                                    <span class="input-hint">未来预测的时间步数 (5–100)</span>
+                                </div>
+                                <div>
+                                    <label class="form-label" style="font-size: 0.88rem;">Mel 频带数</label>
+                                    <input type="number" class="input-field" id="n_mels"
+                                           name="n_mels" value="128" min="32" max="256">
+                                    <span class="input-hint">频谱分析的 Mel 滤波器数量 (32–256)</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 分析选项面板 -->
+                    <div class="panel" id="analysisPanel">
+                        <div class="panel-header" onclick="togglePanel('analysisPanel')">
+                            <i class="fas fa-cogs"></i> 分析选项
+                        </div>
+                        <div class="panel-body">
+                            <div class="options-grid" id="optionsGrid">
+                                {% for opt in analysis_options %}
+                                <div class="option-item {% if opt.default %}active{% endif %} {% if opt.id == 'comparison' %}disabled{% endif %}"
+                                     id="opt_{{ opt.id }}"
+                                     onclick="toggleOption('{{ opt.id }}')">
+                                    <input type="checkbox" name="analysis_{{ opt.id }}"
+                                           id="chk_{{ opt.id }}"
+                                           {% if opt.default %}checked{% endif %}
+                                           {% if opt.id == 'comparison' %}disabled{% endif %}
+                                           style="display:none">
+                                    <div class="option-checkbox"><i class="fas fa-check"></i></div>
+                                    <div>
+                                        <div class="option-name">{{ opt.name }}</div>
+                                        <div class="option-desc">{{ opt.description }}</div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 提交按钮 -->
+                    <div class="submit-row">
+                        <button type="submit" class="btn-submit" id="submitBtn">
+                            <i class="fas fa-rocket"></i> 开始分析
+                        </button>
+                        <p class="submit-hint">分析过程可能需要 1–3 分钟，请耐心等待</p>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================== FEATURES ============================== -->
+    <section class="features-section">
+        <div class="container">
+            <div class="section-header">
+                <div class="section-tag">Core Capabilities</div>
+                <h2 class="section-title">核心能力</h2>
+            </div>
+
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon-wrap"><i class="fas fa-chart-area"></i></div>
+                    <h3 class="feature-name">特征提取</h3>
+                    <p class="feature-desc">波形 · FFT 频谱 · STFT<br>Mel 频谱图 · MFCC 系数</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon-wrap"><i class="fas fa-project-diagram"></i></div>
+                    <h3 class="feature-name">时序分析</h3>
+                    <p class="feature-desc">自相关 / 偏自相关函数<br>周期性检测 · 复杂度度量</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon-wrap"><i class="fas fa-brain"></i></div>
+                    <h3 class="feature-name">模型预测</h3>
+                    <p class="feature-desc">ARIMA · HMM · LSTM<br>Transformer (GPU 加速)</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon-wrap"><i class="fas fa-broadcast-tower"></i></div>
+                    <h3 class="feature-name">频带分析</h3>
+                    <p class="feature-desc">低 / 中 / 高频带分割<br>可预测性排名评估</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon-wrap"><i class="fas fa-link"></i></div>
+                    <h3 class="feature-name">双音频对比</h3>
+                    <p class="feature-desc">多维探索分析<br>相似度检测与匹配发现</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon-wrap"><i class="fas fa-image"></i></div>
+                    <h3 class="feature-name">可视化报告</h3>
+                    <p class="feature-desc">交互式图表展示<br>完整的分析结果报告</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================== FOOTER ============================== -->
+    <footer class="footer">
+        <p><strong>AUDIO LAB</strong> — 音频时间序列分析系统 &nbsp;|&nbsp; Powered by Python & Flask</p>
+    </footer>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div style="text-align:center">
+            <div class="loader-ring"></div>
+            <p class="loader-text">Analyzing...</p>
+        </div>
+    </div>
+
+    <!-- History Modal -->
+    <div class="history-modal" id="historyModal">
+        <div class="history-modal-content">
+            <div class="history-modal-header">
+                <h2><i class="fas fa-history"></i> 历史分析报告</h2>
+                <button type="button" class="history-modal-close" onclick="closeHistoryModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <div style="display:flex;gap:8px;padding:0 32px;border-bottom:1px solid var(--border);">
+                <button class="history-tab active" onclick="switchHistoryTab('reports')" id="tabReports">报告历史</button>
+                <button class="history-tab" onclick="switchHistoryTab('experiments')" id="tabExperiments">已保存实验</button>
+            </div>
+            <div class="history-modal-body" id="historyModalBody">
+                <div class="history-loading"><i class="fas fa-spinner fa-spin"></i> 加载中...</div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .history-tab {
+            padding: 12px 20px;
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: var(--text-secondary);
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .history-tab:hover { color: var(--text-primary); }
+        .history-tab.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }
+    </style>
+
+    <!-- ============================== SCRIPTS ============================== -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script>
+        let currentHistoryTab = 'reports';
+
+        // ---- History Modal Functions ----
+        function openHistoryModal() {
+            const modal = document.getElementById('historyModal');
+            modal.classList.add('active');
+            switchHistoryTab(currentHistoryTab);
+        }
+
+        function closeHistoryModal() {
+            const modal = document.getElementById('historyModal');
+            modal.classList.remove('active');
+        }
+
+        function switchHistoryTab(tab) {
+            currentHistoryTab = tab;
+            document.querySelectorAll('.history-tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('tab' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
+            if (tab === 'reports') {
+                loadHistoryReports();
+            } else {
+                loadSavedExperiments();
+            }
+        }
+
+        async function loadSavedExperiments() {
+            const body = document.getElementById('historyModalBody');
+            try {
+                const response = await fetch('/api/experiments');
+                const saved = await response.json();
+
+                if (!saved || saved.length === 0) {
+                    body.innerHTML = `
+                        <div class="history-empty">
+                            <i class="fas fa-bookmark"></i>
+                            <p>暂无已保存的实验</p>
+                            <p style="font-size:0.85rem;margin-top:10px;">在分析结果页面可以保存实验名称</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                body.innerHTML = saved.map(item => `
+                    <a href="/results/${item.task_id}" class="history-item-link">
+                        <div class="history-item-name">
+                            <i class="fas fa-bookmark"></i>
+                            ${item.name}
+                        </div>
+                        <div class="history-item-meta">
+                            <span class="history-item-time">
+                                <i class="fas fa-clock"></i>
+                                ${item.created_at || 'N/A'}
+                            </span>
+                            <span class="history-item-id">
+                                <i class="fas fa-fingerprint"></i>
+                                ${item.task_id}
+                            </span>
+                        </div>
+                    </a>
+                `).join('');
+            } catch (error) {
+                body.innerHTML = `
+                    <div class="history-empty">
+                        <i class="fas fa-exclamation-circle" style="color:#ff4757;"></i>
+                        <p>无法加载已保存实验</p>
+                        <p style="font-size:0.85rem;margin-top:10px;color:var(--text-muted);">错误: ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        async function loadHistoryReports() {
+            const body = document.getElementById('historyModalBody');
+            try {
+                const response = await fetch('/results/history');
+                if (!response.ok) throw new Error('Failed to fetch history');
+                const history = await response.json();
+
+                if (!history || history.length === 0) {
+                    body.innerHTML = `
+                        <div class="history-empty">
+                            <i class="fas fa-inbox"></i>
+                            <p>暂无历史报告</p>
+                            <p style="font-size:0.85rem;margin-top:10px;">完成一次分析后，历史记录将显示在这里</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                body.innerHTML = history.map(item => `
+                    <a href="/results/${item.task_id}" class="history-item-link">
+                        <div class="history-item-name">
+                            <i class="fas fa-file-audio"></i>
+                            ${item.experiment_name || item.audio1_name || 'Unknown'}
+                        </div>
+                        <div class="history-item-meta">
+                            <span class="history-item-time">
+                                <i class="fas fa-clock"></i>
+                                ${item.created_at || 'N/A'}
+                            </span>
+                            ${item.experiment_name ? '<span class="history-item-id"><i class="fas fa-tag"></i>' + item.experiment_name + '</span>' : ''}
+                            <span class="history-item-id">
+                                <i class="fas fa-fingerprint"></i>
+                                ${item.task_id}
+                            </span>
+                        </div>
+                    </a>
+                `).join('');
+            } catch (error) {
+                body.innerHTML = `
+                    <div class="history-empty">
+                        <i class="fas fa-exclamation-circle" style="color:#ff4757;"></i>
+                        <p>无法加载历史报告</p>
+                        <p style="font-size:0.85rem;margin-top:10px;color:var(--text-muted);">错误: ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // Close modal when clicking outside
+        document.addEventListener('DOMContentLoaded', function() {
+            const modal = document.getElementById('historyModal');
+            modal.addEventListener('click', function(e) {
+                if (e.target === modal) {
+                    closeHistoryModal();
+                }
+            });
+        });
+
+        // ---- Theme Toggle ----
+        function toggleTheme() {
+            const body = document.body;
+            const label = document.querySelector('.theme-label');
+            if (body.getAttribute('data-theme') === 'light') {
+                body.removeAttribute('data-theme');
+                label.textContent = 'Dark Mode';
+                localStorage.setItem('audiolab_theme', 'dark');
+            } else {
+                body.setAttribute('data-theme', 'light');
+                label.textContent = 'Light Mode';
+                localStorage.setItem('audiolab_theme', 'light');
+            }
+        }
+
+        // Restore saved theme
+        const saved = localStorage.getItem('audiolab_theme');
+        if (saved === 'light') {
+            document.body.setAttribute('data-theme', 'light');
+            document.getElementById('themeToggle').checked = true;
+            document.querySelector('.theme-label').textContent = 'Light Mode';
+        }
+
+        // ---- File Upload ----
+        function updateFileName(id) {
+            const input = document.getElementById(id);
+            const label = document.getElementById(id + '-name');
+            if (input.files && input.files[0]) {
+                label.textContent = input.files[0].name;
+                label.style.color = getComputedStyle(document.documentElement).getPropertyValue('--accent');
+                label.style.fontWeight = '600';
+            }
+        }
+
+        function updateComparisonOption() {
+            const hasAudio2 = document.getElementById('audio2').files && document.getElementById('audio2').files.length > 0;
+            const optEl = document.getElementById('opt_comparison');
+            const chkEl = document.getElementById('chk_comparison');
+
+            if (hasAudio2) {
+                optEl.classList.remove('disabled');
+                chkEl.disabled = false;
+                chkEl.checked = true;
+                optEl.classList.add('active');
+            } else {
+                optEl.classList.add('disabled');
+                chkEl.disabled = true;
+                chkEl.checked = false;
+                optEl.classList.remove('active');
+            }
+        }
+
+        function toggleOption(optId) {
+            const el = document.getElementById('opt_' + optId);
+            const chk = document.getElementById('chk_' + optId);
+            if (chk.disabled) return;
+            el.classList.toggle('active');
+            chk.checked = !chk.checked;
+        }
+
+        function togglePanel(panelId) {
+            document.getElementById(panelId).classList.toggle('collapsed');
+        }
+
+        // ---- Form Submit ----
+        document.getElementById('analysisForm').addEventListener('submit', function(e) {
+            document.getElementById('loadingOverlay').classList.add('active');
+        });
+
+        // ---- Scroll Reveal for Feature Cards ----
+        const revealObserver = new IntersectionObserver((entries) => {
+            entries.forEach((entry, idx) => {
+                if (entry.isIntersecting) {
+                    setTimeout(() => {
+                        entry.target.classList.add('visible');
+                    }, idx * 100);
+                    revealObserver.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.15 });
+
+        document.querySelectorAll('.feature-card').forEach(card => {
+            card.style.transition = `all 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275)`;
+            revealObserver.observe(card);
+        });
+
+        // ---- Mouse Parallax on Orbs ----
+        document.addEventListener('mousemove', (e) => {
+            const orbs = document.querySelectorAll('.hero-orb');
+            const cx = window.innerWidth / 2;
+            const cy = window.innerHeight / 2;
+            orbs.forEach((orb, i) => {
+                const factor = (i + 1) * 0.015;
+                const x = (cx - e.clientX) * factor;
+                const y = (cy - e.clientY) * factor;
+                orb.style.transform = `translate(${x}px, ${y}px)`;
+            });
+        });
+    </script>
+</body>
+</html>

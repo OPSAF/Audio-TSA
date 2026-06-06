@@ -1,0 +1,22 @@
+__pycache__/
+outputs/
+uploads/
+static/
+Data/
+experiments/
+experiment.json
+
+# 音频文件
+*.wav
+*.mp3
+*.flac
+*.aac
+*.ogg
+*.m4a
+*.wma
+
+# 测试数据与结果（体积大）
+test_data/
+results/
+test_results/
+test_results2/
