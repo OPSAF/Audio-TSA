@@ -137,5 +137,30 @@ High Band: 3/10 (30%)  ███████████████
 
 ---
 
-> 📊 **数据来源**: `results/rock/aggregate_summary.json` + `commonality_report.json` + `global_ml_report.json` + `batch_report.csv`  
+> 📊 **数据来源**: `results/rock/aggregate_summary.json` + `commonality_report.json` + `global_ml_report.json` + `batch_report.csv`
 > 📝 **日志参考**: `logs/rock_20260607_155335.log`
+
+---
+
+## 🔬 实验数据备注（跨流派分类实验）
+
+### 动态特征在 10 流派中的定位
+
+| 指标 | Rock 均值 | 跨流派排名 | 备注 |
+|------|----------|-----------|------|
+| Energy | 0.151 | 中高 (3/10) | CV=**0.038 第三低**，极其一致 |
+| Brightness | 1929 | 中等 (6/10) | — |
+| Complexity | 10.62 | 中高 (5/10) | — |
+| Rhythm | 0.00739 | 高 (3/10) | — |
+
+Rock 的能量一致性极高 (CV=0.038)，说明摇滚乐在响度上有统一的行业标准。
+
+### 预测难度与最佳模型
+
+- **预测难度**: 中等（ARIMA RMSE=5.21），但 **Transformer 最佳**（RMSE=4.56）——Rock 是少数 Transformer 单曲预测最优的流派
+- **最佳模型**: Transformer（均值 RMSE 4.56），注意力机制更好地捕捉了 Rock 的结构性变化（如副歌-主歌切换）
+- **频带可预测性**: 低频带 60% + 高频带 30% ——高频占比仅次于 Classical/Metal，失真吉他和镲片贡献了大量高频可预测信息
+- **Local vs Global 悖论**: Local ARIMA RMSE 仅 **0.568**（并列最低，与 Classical 持平），但 Global LSTM 差距达 **7.1×**（所有流派最大）——单首 Rock 极易预测，但跨曲共性极弱
+- **分类混淆倾向**: Rock 最常与 **Blues** 混淆——两者共享根音进行模式和吉他驱动的编曲方式，这是实验中最稳定的混淆对之一
+
+> 💡 **Rock 的分类挑战**: Rock 与 Blues 的亲缘关系（12 小节结构、I-IV-V 进行）导致两者成为混淆矩阵中最稳定的混淆对之一。区分 Rock 与 Blues 需要依赖 Rock 更高的能量 (0.151 vs 0.138)、更高亮度 (1929 vs 1835) 以及更高的高频带占比 (30% vs 10%)。Transformer 在 Rock 上的优异表现 (RMSE=4.56) 暗示 Rock 的音乐结构包含明显的长程依赖模式（如段落重复），适合注意力机制捕捉。

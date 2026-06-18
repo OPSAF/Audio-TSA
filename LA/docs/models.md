@@ -377,6 +377,18 @@ $$\nabla' = \begin{cases} \nabla & \|\nabla\| \leq c \\ \frac{c}{\|\nabla\|} \na
 | 可解释性 | ★★★★★ | ★★★★ | ★★ | ★★★ |
 | 非线性建模 | ★ | ★★ | ★★★★ | ★★★★ |
 
+**实验验证发现（12样本实测）**
+
+> 以下数据来自 12 个 ACG 音乐样本的 Mel 均值序列预测实验，揭示了单一 RMSE 指标的系统性误导：
+>
+> - **Train RMSE**：四模型一致（1.634）= persistence 基线，说明训练集拟合无差异
+> - **HMM**：Test RMSE=3.681（排名第二），但 **DirAcc≡0**——退化为常数预测，完全未学到变化规律
+> - **ARIMA**：DirAcc=0.544 最高，但被 **Sample 3 灾难性崩溃拉高聚合 RMSE**（单样本 RMSE=510,443）
+> - **LSTM**：数值精度最优（RMSE=3.075），但 **DiffCorr 为负（-0.109）**，差分方向预测反而反向
+> - **Transformer**：DiffCorr=0.103 和 Peak Jaccard 领先，综合表现最均衡
+>
+> ⚠️ **核心警示：低 RMSE ≠ 学到规律。** 评估模型时必须综合考察 RMSE + DirAcc + DiffCorr 三项指标。
+
 ### 7.2 选择建议
 
 **场景一：快速分析**
@@ -429,6 +441,7 @@ $$\nabla' = \begin{cases} \nabla & \|\nabla\| \leq c \\ \frac{c}{\|\nabla\|} \na
 - 引入预训练模型（如 Wav2Vec）
 - 多任务学习（预测 + 分类）
 - 在线学习（增量更新）
+- 将四模型对比框架应用于更大规模数据集（如 Million Song Dataset），验证上述发现的普适性
 
 ---
 

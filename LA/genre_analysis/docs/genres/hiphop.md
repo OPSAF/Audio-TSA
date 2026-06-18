@@ -111,5 +111,29 @@ High Band: 2/10 (20%)  ██████████
 
 ---
 
-> 📊 **数据来源**: `results/hiphop/aggregate_summary.json` + `commonality_report.json` + `global_ml_report.json` + `batch_report.csv`  
+> 📊 **数据来源**: `results/hiphop/aggregate_summary.json` + `commonality_report.json` + `global_ml_report.json` + `batch_report.csv`
 > 📝 **日志参考**: `logs/hiphop_20260607_140243.log`
+
+---
+
+## 🔬 实验数据备注（跨流派分类实验）
+
+### 动态特征在 10 流派中的定位
+
+| 指标 | Hip-Hop 均值 | 跨流派排名 | 备注 |
+|------|-------------|-----------|------|
+| Energy | **0.181** | **第二高 (2/10)** | 仅次于 Pop |
+| Brightness | 2019 | 高 (4/10) | — |
+| Complexity | 10.73 | 高 (4/10) | — |
+| Rhythm | 0.00684 | 高 (4/10) | — |
+
+Hip-Hop 是高能量流派阵营的一员，与 Pop、Metal、Disco 同属"活跃"端。
+
+### 预测难度与最佳模型
+
+- **预测难度**: 中等（ARIMA RMSE=5.17），四模型表现非常接近（5.17 vs 5.97 vs 5.26 vs 5.27）
+- **最佳模型**: ARIMA（微弱优势），但各模型差距 < 0.8，说明 Hip-Hop 对模型选择不敏感
+- **频带可预测性**: 低频带占 80%（8/10 首）——808 底鼓和贝斯主导低频；高频带 20% 来自人声高频和采样
+- **Global 可学习性**: LSTM vs ARIMA 差距仅 **2.0×**（所有流派最小），说明 Hip-Hop 的跨曲共性相对较强
+
+> 💡 **Hip-Hop 的分类特征**: 第二高能量 (0.181) 和高频谱平坦度 (0.433) 使其在分类中容易与 Pop 区分（Pop 能量更高但节奏更强）。Hip-Hop 的复杂度 GARCH 变异性最大 (CV=1.16) 反映了从 boom bap 到 trap 的制作多样性，这增加了分类的不确定性。离群点仅 8 个（第二少），说明 Hip-Hop 内部一致性较好。

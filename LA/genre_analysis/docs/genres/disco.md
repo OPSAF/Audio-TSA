@@ -121,5 +121,29 @@ Disco 是所有流派中**内部一致性最高**的流派：
 
 ---
 
-> 📊 **数据来源**: `results/disco/aggregate_summary.json` + `commonality_report.json` + `global_ml_report.json` + `batch_report.csv`  
+> 📊 **数据来源**: `results/disco/aggregate_summary.json` + `commonality_report.json` + `global_ml_report.json` + `batch_report.csv`
 > 📝 **日志参考**: `logs/disco_20260607_134833.log`
+
+---
+
+## 🔬 实验数据备注（跨流派分类实验）
+
+### 动态特征在 10 流派中的定位
+
+| 指标 | Disco 均值 | 跨流派排名 | 备注 |
+|------|-----------|-----------|------|
+| Energy | 0.134 | 中等 (6/10) | CV=0.049 极其一致 |
+| Brightness | 2086 | 高 (3/10) | CV=0.035 所有流派最低 |
+| Complexity | 10.81 | 高 (3/10) | CV=0.007 所有流派最低！ |
+| Rhythm | 0.00485 | 中等 (6/10) | — |
+
+Disco 是内部一致性最高的流派：三个核心维度的 CV 均 < 0.05。
+
+### 预测难度与最佳模型
+
+- **预测难度**: 较低（ARIMA RMSE=**4.24**，仅次于 Metal 的 3.42），且标准差仅 0.999（所有流派最低）
+- **最佳模型**: ARIMA（均值 RMSE 4.24）最为稳健
+- **频带可预测性**: **100% 低频带**（唯一全低频流派）——Disco 标志性的四四拍底鼓和贝斯线提供了极其规律的低频模式
+- **分类混淆倾向**: Disco 最常与 **Pop** 混淆——两者共享高能量制作、四四拍节奏驱动和商业化制作标准
+
+> 💡 **Disco 的分类强信号**: 100% 低频集中度 + 极高的内部一致性使 Disco 在分类任务中表现良好。频谱平坦度高 (0.446) 和样本熵最高 (3.159) 反映了其丰富的配器层次。Transformer 在 Disco 上表现最好（Global RMSE=9.96），说明 Disco 规律的频谱模式对深度学习模型也友好。

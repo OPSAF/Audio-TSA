@@ -128,5 +128,29 @@ Mid Band:  2/10 (20%)  ██████████
 
 ---
 
-> 📊 **数据来源**: `results/jazz/aggregate_summary.json` + `commonality_report.json` + `global_ml_report.json` + `batch_report.csv`  
+> 📊 **数据来源**: `results/jazz/aggregate_summary.json` + `commonality_report.json` + `global_ml_report.json` + `batch_report.csv`
 > 📝 **日志参考**: `logs/jazz_20260607_141659.log`
+
+---
+
+## 🔬 实验数据备注（跨流派分类实验）
+
+### 动态特征在 10 流派中的定位
+
+| 指标 | Jazz 均值 | 跨流派排名 | 备注 |
+|------|----------|-----------|------|
+| Energy | **0.075** | 低 (2/10) | 仅高于 Classical |
+| Brightness | **1294** | 低 (2/10) | 仅高于 Classical |
+| Complexity | **9.60** | 低 (2/10) | 仅高于 Classical |
+| Rhythm | 0.00083 | 低 (2/10) | 但 CV=**1.010** 最高之一 |
+
+Jazz 与 Classical 共享"低能-暗-简"的声学特征区间，但 Jazz 的节奏变异性远超 Classical。
+
+### 预测难度与最佳模型
+
+- **预测难度**: **最高**（ARIMA RMSE=**7.80**，Transformer RMSE=**7.44**）——所有流派中最差
+- **最佳模型**: Transformer（均值 RMSE 7.44）意外地略优于 ARIMA（7.80），注意力机制可能捕捉到了爵士即兴演奏的长程依赖
+- **频带可预测性**: 低频带占 80%（8/10 首），但标准差极大——部分歌曲中频更可预测
+- **分类混淆倾向**: Jazz 可能与 Classical 产生混淆（两者能量和亮度均处于低端），但 Jazz 的节奏 CV 极高 (1.01) 和更多离群点提供了区分信号
+
+> 💡 **Jazz 的分类困境**: Jazz 是预测最困难、离群点最多 (22 个)、节奏变异最大 (CV=1.01) 的流派。在随机森林分类中，Jazz 的低频谱平坦度 (0.247) 和低过零率 (0.151) 使其容易与 Classical 归入同一"安静"聚类。但 Jazz 的极端变异性也可能导致分类器难以学习稳定的决策边界。jazz.00010 (ARIMA RMSE=22.01) 是整个数据集中最难预测的单曲。

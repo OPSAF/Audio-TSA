@@ -28,7 +28,7 @@
 | Energy | medium | 0.776 | 2.73s |
 | Brightness | high | 0.942 | 11.64s |
 | Complexity | high | 0.894 | 6.17s |
-| Rhythm | low | 0.502 | 1.01s |
+| Rhythm | low | 0.502 | 1.01s
 
 ---
 

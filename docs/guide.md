@@ -248,6 +248,7 @@ python main.py --audio1 song.wav --analysis features,timeseries,dynamics,predict
 |------|--------|----------|----------|
 | 语音分析 | 16000 Hz | 10-20 | features, timeseries, prediction |
 | 音乐分析 | 22050 Hz | 20-50 | features, dynamics, band |
+| 学术研究 | 22050 Hz | 30-50 | features,dynamics,model_analysis,timeseries,prediction |
 | 快速测试 | 8000 Hz | 10 | features, timeseries |
 | 深度分析 | 44100 Hz | 30-50 | 全部选项 |
 
@@ -256,6 +257,8 @@ python main.py --audio1 song.wav --analysis features,timeseries,dynamics,predict
 1. **白噪声检验**：如果通过白噪声检验，说明信号随机性强，预测难度大
 2. **频带分析**：关注可预测性排名，选择最可预测的频带进行重点分析
 3. **模型对比**：综合 RMSE、MAE、MSE 三个指标选择最佳模型
+
+   > ⚠️ **重要：** 实验发现 RMSE 单一指标可能产生严重误导（HMM 可退化为常数预测获得低 RMSE 但零方向准确率）。建议综合考察 RMSE + 方向准确率(DirAcc) + 差分相关性(DiffCorr)。
 
 ---
 

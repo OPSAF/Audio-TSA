@@ -203,5 +203,29 @@ High Band: 1/10 (10%)  █████
 
 ---
 
-> 📊 **数据来源**: `results/blues/aggregate_summary.json` + `commonality_report.json` + `global_ml_report.json` + `batch_report.csv`  
+> 📊 **数据来源**: `results/blues/aggregate_summary.json` + `commonality_report.json` + `global_ml_report.json` + `batch_report.csv`
 > 📝 **日志参考**: `logs/blues_20260606_223109.log`
+
+---
+
+## 🔬 实验数据备注（跨流派分类实验）
+
+### 动态特征在 10 流派中的定位
+
+| 指标 | Blues 均值 | 跨流派排名 | 备注 |
+|------|-----------|-----------|------|
+| Energy | 0.138 | 中等 (5/10) | — |
+| Brightness | 1835 | 中低 (7/10) | — |
+| Complexity | 10.36 | 中高 (6/10) | — |
+| Rhythm | 0.00566 | 中低 (7/10) | — |
+
+**变异系数亮点**: Blues 的能量 CV=**0.446** 为所有流派中最高——说明蓝调歌曲间的能量差异极大，从原声滑棒吉他到电声放大风格跨度大。
+
+### 预测难度与最佳模型
+
+- **预测难度**: 中等偏易（ARIMA RMSE=4.99，低于 Jazz/Reggae）
+- **最佳模型**: LSTM（均值 RMSE 4.76）略优于 ARIMA（4.99）
+- **频带可预测性**: 低频带占 80%（8/10 首），Blues 的根音进行和贝斯线在低频最为规律
+- **分类混淆倾向**: 在随机森林分类中，Blues 最常与 **Rock** 混淆——两者共享 12 小节结构和相似的根音模式
+
+> 💡 **频谱平坦度在分类中的角色**: 频谱平坦度是全局最重要的分类特征（重要性 0.030）。Blues 的频谱平坦度均值 0.367 处于中等水平，介于 Classical (0.214) 和 Metal (0.475) 之间，这与其"既不纯净也不噪杂"的音色特征一致。

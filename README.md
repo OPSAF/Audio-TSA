@@ -2,6 +2,13 @@
 
 面向音频信号的**多层时间序列分析平台**。从原始波形出发，逐层提取趋势（Trend）、波动率（Volatility）、隐状态（Hidden States）、记忆特征（Memory）和注意力模式（Attention），最终给出人类可读的结构化报告。
 
+## 研究亮点
+
+- **首次提出 ACF/PACF 六地标体系（300阶全曲分析）**：突破传统截断阶数限制，完整捕捉音乐信号的全局自相关结构
+- **首次将 GARCH 波动率聚集检验应用于音乐能量趋势（α+β=0.801）**：验证音乐能量波动存在显著的波动率聚集效应，为金融时序工具在音乐领域的迁移提供实证支持
+- **发现 RMSE 单一指标具有系统性误导性（HMM RMSE=3.68 但 DirAcc=0）**：揭示传统预测精度指标在非平稳音乐序列上的失效问题，提出多维度评估框架的必要性
+- **基于 124 维时间序列特征的流派分类达到 45% 准确率**：证明纯时序统计特征在无频谱信息条件下仍具备可区分的音乐语义
+
 ## 设计哲学
 
 ```
@@ -32,6 +39,15 @@
 | **Prediction** | `audiots/prediction.py` | ARIMA / HMM / LSTM / Transformer 预测引擎 + 趋势/波动率预测接口 |
 | **Band Analysis** | `audiots/band_analysis.py` | 低频/中频/高频带可预测性并行分析 |
 | **Unsupervised** | `audiots/unsupervised.py` | 变点检测、Motif 发现、NMF 频谱分解、RQA 递归量化、异常检测、聚类 |
+
+### 学术研究模块 (LA)
+
+| 模块 | 文件 | 功能 |
+|------|------|------|
+| **TS Discovery** | `LA/ts_law_discovery.py` | 三项独立实验：ACF/PACF地标、四模型对比、GARCH检验 |
+| **Genre Classify** | `LA/genre_analysis/genre_classify.py` | 124维TS特征 + 五分类器流派判别 |
+| **Genre Viewer** | `LA/genre_analysis/viewer.py` | 流派分析结果Web可视化 |
+| **Batch Analyze** | `LA/batch_analyze.py` | 同流派批量统计分析 + Global ML |
 
 ### 对比与探索
 
@@ -235,6 +251,18 @@ Audio Lab/
 │   ├── visualization.py           # 可视化
 │   ├── similarity_viz.py          # 相似度可视化
 │   └── discovery_viz.py           # 探索可视化
+├── LA/                           # 学术研究模块
+│   ├── docs/                     # 研究文档
+│   ├── report/                   # LaTeX学术报告
+│   │   └── music_time_series_analysis.tex
+│   ├── Sample/                   # 实验样本与结果
+│   ├── genre_analysis/          # 流派分类模块
+│   │   ├── genre_classify.py     # 分类脚本
+│   │   ├── viewer.py             # Web查看器
+│   │   ├── classify_results/     # 分类输出
+│   │   └── docs/genres/          # 流派文档
+│   ├── ts_law_discovery.py       # 时间序列规律发现
+│   └── batch_analyze.py          # 批量分析工具
 ├── templates/                     # Web 模板
 ├── static/                        # 静态资源
 ├── main.py                        # CLI 入口
@@ -242,6 +270,13 @@ Audio Lab/
 ├── requirements.txt               # 依赖
 └── README.md                      # 本文档
 ```
+
+## 硬件环境
+
+- CPU: Intel Core i7-10870H
+- GPU: NVIDIA RTX 3060 Laptop (6 GB 显存)
+- RAM: 16 GB
+- 实验耗时参考：全曲300阶ACF/PACF（12样本）约140秒；124维特征提取（120样本）约20分钟
 
 ## 许可证
 
@@ -259,3 +294,6 @@ Web 应用中可通过 `/docs/<page>` 访问，也可直接阅读 markdown 文�
 | [**理论基础**](docs/theory.md) | 从声波振动到数字信号处理的教学讲解 |
 | [**分析模块详解**](docs/analysis.md) | 每个分析模块的算法、输入输出、原理 |
 | [**结果解读**](docs/results.md) | 如何看懂图表和分析输出 |
+| [**时间序列规律发现**](LA/docs/ts_law_discovery.md) | ACF/PACF六地标、四模型预测对比、GARCH波动率检验 |
+| [**流派分类实验**](LA/docs/genre_classify.md) | 124维TS特征工程 + 多分类器流派判别 |
+| [**批量分析工具**](LA/docs/batch_analyze.md) | 同流派统计分析 + 全局ML训练 |

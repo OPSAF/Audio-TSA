@@ -126,5 +126,29 @@ Reggae 的节奏 CV 是所有流派中**最高的**（1.380），反映了从 on
 
 ---
 
-> 📊 **数据来源**: `results/reggae/aggregate_summary.json` + `commonality_report.json` + `global_ml_report.json` + `batch_report.csv`  
+> 📊 **数据来源**: `results/reggae/aggregate_summary.json` + `commonality_report.json` + `global_ml_report.json` + `batch_report.csv`
 > 📝 **日志参考**: `logs/reggae_20260607_152920.log`
+
+---
+
+## 🔬 实验数据备注（跨流派分类实验）
+
+### 动态特征在 10 流派中的定位
+
+| 指标 | Reggae 均值 | 跨流派排名 | 备注 |
+|------|------------|-----------|------|
+| Energy | 0.116 | 中低 (7/10) | CV=0.053 极其一致 |
+| Brightness | 1901 | 中等 (5/10) | — |
+| Complexity | 10.50 | 中等 (6/10) | — |
+| Rhythm | 0.00409 | 中低 (8/10) | 但 CV=**1.380 所有流派最高！** |
+
+Reggae 最突出的特点是节奏维度的极端变异性——三个节奏相关特征全部 CV > 1.0。
+
+### 预测难度与最佳模型
+
+- **预测难度**: 中等偏难（ARIMA RMSE=**5.65**），Local ARIMA 高达 2.21（非线性较强）
+- **最佳模型**: ARIMA（均值 RMSE 5.65）最为稳定，Transformer 在部分歌曲上有优势
+- **频带可预测性**: 低频带占 70%（7/10 首）——Reggae 的核心是贝斯线（skank/off-beat），低频主导
+- **分类混淆倾向**: Reggae 的独特节奏模式（one-drop 反拍）使其在分类中有一定独特性，但低能量+中等亮度可能使其与 Country 或 Blues 产生轻度混淆
+
+> 💡 **Reggae 的分类特征**: 节奏 CV=**1.38（全数据集最高）** 是 Reggae 最显著的特征。这种极端变异性来自 one-drop、rockers、steppers 等子风格的截然不同节奏模式。有趣的是，尽管节奏多变，能量 CV 仅 0.053（第二低，仅次于 Disco），说明 Reggae 的制作响度标准非常统一。样本熵较高 (3.115) 和频谱平坦度中等 (0.387) 反映了其丰富的配器层次。Local ARIMA RMSE=2.21 说明 Reggae 的 Mel 包络具有较强的非线性。

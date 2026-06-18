@@ -125,5 +125,29 @@
 
 ---
 
-> 📊 **数据来源**: `results/country/aggregate_summary.json` + `commonality_report.json` + `global_ml_report.json` + `batch_report.csv`  
+> 📊 **数据来源**: `results/country/aggregate_summary.json` + `commonality_report.json` + `global_ml_report.json` + `batch_report.csv`
 > 📝 **日志参考**: `logs/country_20260606_225622.log`
+
+---
+
+## 🔬 实验数据备注（跨流派分类实验）
+
+### 动态特征在 10 流派中的定位
+
+| 指标 | Country 均值 | 跨流派排名 | 备注 |
+|------|-------------|-----------|------|
+| Energy | 0.112 | 中低 (8/10) | 高度一致 (CV=0.092) |
+| Brightness | 1647 | 低 (9/10) | 仅高于 Classical/Jazz |
+| Complexity | 10.09 | 低 (9/10) | CV=0.017 极其一致 |
+| Rhythm | 0.00208 | 低 (9/10) | 但 CV=0.860 差异极大 |
+
+Country 的亮度和复杂度接近 Classical 的低端区间，但能量明显高于古典音乐。
+
+### 预测难度与最佳模型
+
+- **预测难度**: 中等（ARIMA RMSE=4.90），四模型表现接近
+- **最佳模型**: ARIMA（均值 RMSE 4.90）最稳定
+- **频带可预测性**: 低频带占 90%（9/10 首）——吉他和人声基频集中在低中频，是所有流派中低频集中度最高的之一
+- **分类混淆倾向**: Country 可能与 Rock 或 Blues 产生一定混淆（三者均以吉他为核心乐器，低频特征相似）
+
+> 💡 **Country 的分类信号**: Country 的频谱平坦度 (0.348) 和亮度 (1647) 均处于较低水平，这与其原声乐器为主的音色一致。在随机森林中，这些"安静"特征有助于将其与 Pop/Metal/Hip-Hop 等高能量流派区分开。但与 Blues/Rock 的区分需要依赖节奏和复杂度等细粒度特征。

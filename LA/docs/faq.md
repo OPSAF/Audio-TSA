@@ -126,6 +126,14 @@ pip install torch --index-url https://download.pytorch.org/whl/cpu
 
 **A:** 目前每次分析都会重新训练。后续版本会支持模型保存和加载。
 
+### Q14.5: 为什么 HMM 的 RMSE 很低但效果不好？
+
+**A:** 这是本次实验的核心发现之一。HMM 在测试集上的 RMSE=3.681（四模型中排名第二），但其方向准确率(DirAcc)=0——意味着它完全没有预测对涨跌方向。原因是 HMM 退化为常数预测（预测值方差为零）：当真实值的整体水平较稳定时，猜一个恒定均值就能得到较低的 RMSE，但这不等于学到了任何规律。**永远检查 DirAcc 或 DiffCorr，不要只看 RMSE。**
+
+### Q14.6: ARIMA 为什么会在某些样本上崩溃？
+
+**A:** ARIMA 是线性模型，其前提假设是信号具有线性自回归结构。当遇到高度非线性、非平稳的信号（如实验中的 Sample 3 — ClariS-コネクト），ARIMA 的自动定阶可能给出极端参数，导致预测值爆炸式增长（单样本 RMSE=510,443）。这是 ARIMA 类模型的已知弱点——在线性假设被严重违反时可无预警失效。排除该异常样本后，ARIMA 的 Test RMSE 约为 3.5，与其他模型处于同一量级。
+
 ---
 
 ## 五、结果解读
@@ -133,7 +141,7 @@ pip install torch --index-url https://download.pytorch.org/whl/cpu
 ### Q15: 白噪声检验通过了意味着什么？
 
 **A:** 意味着信号随机性强，难以预测。建议：
-- 关注频带分析，寻找可预测的频带
+- 关注频带分析，寻找可预测的成分
 - 降低预测期望
 - 考虑其他分析角度（如特征提取）
 
@@ -145,6 +153,8 @@ pip install torch --index-url https://download.pytorch.org/whl/cpu
 - **MSE**：优化目标，不直接解读
 
 综合比较，选择 RMSE 最小的模型。
+
+> ⚠️ **重要补充：** 本次实验证明 RMSE 可能产生严重误导。HMM 可以用常数预测获得低 RMSE 但零方向准确率。建议始终结合 Directional Accuracy 和 Diff Correlation 综合判断。
 
 ### Q17: 为什么不同频带的预测效果差异很大？
 
