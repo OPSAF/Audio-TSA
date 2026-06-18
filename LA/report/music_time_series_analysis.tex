@@ -1,0 +1,751 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[UTF8,fontset=windows]{ctex}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{setspace}
+\onehalfspacing
+\usepackage{microtype}
+\setlength{\emergencystretch}{1.5em}
+\usepackage{amsmath,amssymb,amsfonts,bm}
+\usepackage{graphicx,float,subcaption,placeins}
+\usepackage{booktabs,longtable,array,multirow,tabularx}
+\usepackage[table]{xcolor}
+\usepackage{caption}
+\definecolor{myblue}{RGB}{30,90,150}
+\definecolor{myred}{RGB}{200,50,50}
+\definecolor{mygreen}{RGB}{50,130,50}
+\usepackage[colorlinks=true,linkcolor=myblue,citecolor=mygreen,urlcolor=myblue]{hyperref}
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage{enumitem}
+
+\title{\textbf{\huge 音乐时间序列分析实验}\\[8pt]
+       \large 波形自相关结构、多模型预测对比与流派特征工程的系统性探索}
+\author{陆晓威\quad 2023212547}
+\date{2026年6月}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+\noindent 本文基于自研代码项目"Audio Lab"平台，从样本级、结构级、流派级与分类级四个层级对音乐音频进行系统性时间序列分析。\textbf{首次提出ACF/PACF六地标体系}，以六个可解释标量压缩音乐波形的全曲自相关结构；\textbf{首次将GARCH波动率聚集检验应用于音乐能量趋势}，验证了音乐信号中存在与金融时间序列同量级的条件异方差效应。具体而言：样本级以两首ACG音乐片段演示波形$\to$FFT$\to$STFT$\to$Mel$\to$MFCC的完整信号处理流水线。结构级基于12个ACG音乐样本执行三项独立实验——以原始波形全曲为输入（300阶ACF/PACF）提取六项地标，以Mel语谱图逐帧均值序列为目标对比ARIMA/HMM/LSTM/Transformer的规律学习能力，以能量趋势序列为输入检验GARCH(1,1)波动率聚集。流派级对十类共100个样本进行跨流派多维特征对比。分类级以124维时间序列特征向量为输入采用五种分类器执行流派判别。结果表明：全曲ACF呈衰减振荡模式（过零滞后均值43.9阶，AR阶数均值158.9阶）；RMSE单一指标存在系统性误导——HMM的RMSE=3.68但方向准确率恒为零，ARIMA方向准确率最高（0.544）但被单样本灾难性崩溃拉高RMSE，Transformer差分相关性为正（0.103）；GARCH(1,1)确认能量波动聚集（平均$\alpha+\beta=0.801$）但标准化残差均拒绝白噪声假设；Metal预测误差最低（ARIMA RMSE=3.42），Jazz最高（7.44）；基于124维时序特征的流派分类在随机森林上达到45\%准确率。
+
+\vspace{6pt}
+\noindent\textbf{关键词：} 音乐时间序列；自相关函数；偏自相关函数；GARCH波动率聚集；Mel语谱图；MFCC；流派分类
+\end{abstract}
+
+\newpage
+\tableofcontents
+\newpage
+
+%══════════════════════════════════════════════════════════════════════════
+\section{引言}
+%══════════════════════════════════════════════════════════════════════════
+
+时间序列分析的方法论体系可追溯至Box与Jenkins对ARIMA模型的系统阐述\cite{box2015}，经过半世纪发展已在金融计量\cite{bollerslev1986}、气象预报、临床信号处理\cite{richman2000}和工业预测性维护等领域形成成熟范式。然而，在AIGC于文本和图像模态取得显著进展的背景下，音频——尤其是音乐——的时间序列建模仍处于相对欠发展状态。截至2026年6月，主流通用大模型（豆包、通义千问、DeepSeek、GPT、Gemini、Claude、Grok等）均未开放音频文件直接上传接口，音乐生成则几乎被单一个体（Suno AI）垄断。音频信号天然是时间序列——16000 Hz采样率意味着每秒16000个按时间索引的数据点，内含周期性振荡、趋势漂移、波动率聚集和结构性断点等全部标准时序分析对象——但时序分析领域与音频信号处理领域之间的交叉研究至今薄弱。
+
+\subsection*{国内外研究现状}
+
+在音乐信号处理领域，MFCC作为语音识别的核心特征被广泛迁移至音乐分类任务\cite{tzanetakis2002}\cite{mcfee2015}，但其本质是频域静态描述符，未触及信号的时间依赖结构。在音乐信息检索（MIR）方向，Tzanetakis与Cook开创性地将统计特征与机器学习结合用于流派分类\cite{tzanetakis2002}，后续工作逐步引入深度学习端到端方案，但可解释性显著降低。在时间序列分析侧，GARCH模型在金融领域的成功应用\cite{bollerslev1986}提供了成熟的波动率建模框架，LSTM\cite{hochreiter1997}与Transformer\cite{vaswani2017}等深度学习架构在通用时序预测任务上取得了突破性进展，但这些方法尚未被系统地应用于音乐信号的规律发现任务。\textbf{本文的学术贡献在于填补这一交叉空白：}将经典时序分析工具箱（ACF/PACF、GARCH、HMM）与现代深度学习架构（LSTM、Transformer）统一纳入同一实验框架，对音乐信号进行从采样点到流派级的多尺度系统性探索。
+
+\subsection*{研究内容与贡献}
+
+本文基于自研的"Audio Lab"平台，从四个层级展开研究：信号处理流水线（第2节）建立波形$\to$FFT$\to$STFT$\to$Mel$\to$MFCC工具链；结构规律发现（第3节）通过三项独立实验探索全曲ACF/PACF自相关结构、四模型预测能力和GARCH波动率；流派对比（第4节）在十类共100个样本上进行跨流派分析；特征分类（第5节）以124维TS特征执行流派判别。分析样本主要来自ACG音乐作品及GTZAN数据集\cite{tzanetakis2002}，均已匿名化处理。
+
+%══════════════════════════════════════════════════════════════════════════
+\FloatBarrier
+\section{信号处理流水线：双音乐样本分析}
+%══════════════════════════════════════════════════════════════════════════
+
+本章以两首音乐片段（任务c535d246，后称Sample A和Sample B）为实例，演示从原始波形到MFCC的完整处理链，并对两首歌曲进行多维度对比。音频格式为FLAC无损，采样率16000 Hz。本章的目的是建立工具直觉——在进入后续章节的批量实验之前，先在两首具体的歌曲上看清楚每一步做了什么、产出了什么。
+
+\FloatBarrier
+\subsection{理论基础}
+
+\subsubsection{采样定理与DFT}
+
+Nyquist-Shannon采样定理指出，为从离散采样点无失真恢复连续信号，采样频率$f_s$须满足：
+\begin{equation}
+    f_s \geq 2f_{\max}
+    \label{eq:nyquist}
+\end{equation}
+$f_s=16000$ Hz可覆盖0--8000 Hz频段，足以包含人声及绝大多数乐器的基频与主要泛音。离散傅里叶变换（DFT）将$N$点时域序列投影到正交正弦基：
+\begin{equation}
+    X[k] = \sum_{n=0}^{N-1} x[n]\, e^{-j\frac{2\pi}{N}kn},\quad k=0,\ldots,N-1
+    \label{eq:dft}
+\end{equation}
+FFT（Cooley-Tukey算法）将复杂度从$O(N^2)$降至$O(N\log N)$。Wiener-Khinchin定理确立了功率谱密度与自相关函数的傅里叶变换对关系：
+\begin{equation}
+    S(f) = \sum_{k=-\infty}^{\infty} \rho_k\, e^{-j2\pi fk}
+    \label{eq:wiener}
+\end{equation}
+
+\subsubsection{STFT与时间-频率权衡}
+
+FFT假定信号全局平稳，完全舍弃时间维度。STFT以滑动窗口$w(\tau-t)$对局部信号逐段做FFT：
+\begin{equation}
+    X(t,f) = \int_{-\infty}^{\infty} x(\tau)\,w(\tau-t)\,e^{-j2\pi f\tau}\,d\tau
+    \label{eq:stft}
+\end{equation}
+窗长决定核心权衡：频率分辨率$\Delta f = f_s/L$与时间定位精度互为倒数。取$L=2048$采样点（128\,ms），hop length=512（32\,ms）。
+
+\subsubsection{Mel刻度与MFCC}
+
+人耳耳蜗基底膜对频率的响应近似对数关系。Mel刻度\cite{davis1980}将物理频率映射到感知空间：
+\begin{equation}
+    m = 2595\log_{10}\!\left(1+\frac{f}{700}\right)
+    \label{eq:mel}
+\end{equation}
+Mel语谱图以三角滤波器组$H_m[k]$对STFT功率谱加权求和后取对数：
+\begin{equation}
+    S_{\text{mel}}[m,t] = \log\!\left(\sum_k |X[t,k]|^2\cdot H_m[k]\right)
+    \label{eq:mel_spec}
+\end{equation}
+MFCC对$S_{\text{mel}}$沿频率轴做DCT压缩\cite{davis1980}：
+\begin{equation}
+    c_n = \sum_{m=0}^{M-1} S_{\text{mel}}[m]\cos\!\left(\frac{\pi n(m+0.5)}{M}\right)
+    \label{eq:mfcc}
+\end{equation}
+DCT将频谱平滑包络（$c_0$--$c_3$，总能量与倾斜）与精细振荡（$c_4$以上，谐波细节）分离。取$M=128$个Mel滤波器，保留$N_{\text{mfcc}}=20$个系数。
+
+%────────────────────────────────────────────────────────────────────────────
+\FloatBarrier
+\subsection{步骤一：波形——时域的起点}
+%────────────────────────────────────────────────────────────────────────────
+
+数字音频的最底层表示是归一化到$[-1,1]$的一维实数序列$\{x[n]\}_{n=0}^{N-1}$。从波形中能够读出的信息较为有限：两首歌的振幅包络都呈现周期性调制——密集振铃区对应打击乐器和吉他的持续发声，稀疏区对应过渡段或尾音——但哪些频率分量在主导信号、它们的相对强度关系如何，在时域表示中完全不可见。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.88\textwidth]{../Sample/c535d246/waveform.png}
+    \caption{Sample A的时域波形。横轴时间（秒），纵轴归一化振幅$[-1,1]$。Sample A的波形呈现音乐典型的密集编曲特征——信号填充率高、静音段少。波形包络的周期性起伏大致对应主歌/副歌的段落切换，但具体频率成分完全不可见。这一局限驱动了FFT转换。}
+    \label{fig:waveform}
+\end{figure}
+
+%────────────────────────────────────────────────────────────────────────────
+\FloatBarrier
+\subsection{步骤二：FFT——从时间到频率}
+%────────────────────────────────────────────────────────────────────────────
+
+图\ref{fig:fft}展示了FFT将时域信号转换到频域后的结果。两首歌在频域的总体轮廓相似——低频主导、高频衰减但不枯竭——但各自的谐波峰位置和相对强度存在差异，反映了编曲和配器的不同。然而，FFT的致命缺陷在于它抹除了全部时间信息：这张静态频谱图无法告诉我们哪个频率在哪个时刻出现，也无法展示音乐在时间维度上的动态演化。这一"时间盲点"直接驱动了STFT。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.88\textwidth]{../Sample/c535d246/fft_spectrum.png}
+    \caption{Sample A的FFT幅度谱。横轴频率0--8000 Hz，纵轴对数幅度（dB）。Sample A的频谱能量集中于0--2000 Hz，在该区间可见多个清晰谐波峰（对应人声和伴奏的基频及泛音）。2000 Hz以上能量逐步衰减但保持丰富度——这是完整乐队编曲（电吉他+电贝斯+套鼓+合成器）的频谱签名。}
+    \label{fig:fft}
+\end{figure}
+
+%────────────────────────────────────────────────────────────────────────────
+\FloatBarrier
+\subsection{步骤三：STFT——时频联合}
+%────────────────────────────────────────────────────────────────────────────
+
+图\ref{fig:stft}通过滑动窗口的逐帧FFT恢复了时间维度。STFT语谱图给出了比FFT丰富得多的信息：低频的持续性（水平亮带）、中频旋律的时间走向（水平条纹的起落）、高频的瞬态事件（竖直亮线）。两首歌在STFT中的差异开始显现——例如高频瞬态的密度和分布模式不同，反映了打击乐编排的差异。但STFT的纵轴是线性频率，人耳对100 Hz和200 Hz的感知差异（一个八度）远大于1000 Hz和1100 Hz的差异，线性刻度无法反映这一感知非均匀性。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.88\textwidth]{../Sample/c535d246/stft_spectrogram.png}
+    \caption{Sample A的STFT语谱图。横轴时间，纵轴线频（0--8000 Hz），亮度=能量。Sample A的STFT语谱图呈现出低频持续水平亮带（贝斯+底鼓稳态辐射）、中频水平条纹（人声旋律+吉他谐波轨迹）和高频竖直亮线（镲片+合成器瞬态冲击）三层结构。纵轴为线性频率，与人耳对数感知特性不匹配——驱动Mel转换。}
+    \label{fig:stft}
+\end{figure}
+
+%────────────────────────────────────────────────────────────────────────────
+\FloatBarrier
+\subsection{步骤四：Mel语谱图——感知频率刻度}
+%────────────────────────────────────────────────────────────────────────────
+
+图\ref{fig:mel}展示了Mel滤波后的语谱图。与STFT（图\ref{fig:stft}）相比，Mel语谱图在低频区域保留了更丰富的细节纹理，高频区域的视觉信息则被压缩。两首歌在低频Mel频段的能量分布模式差异更为清晰可辨——这与ACG音乐中人声和旋律线集中在中低频段的声学特征是一致的。Mel语谱图是后续所有动态趋势提取、GARCH建模和预测任务的通用输入表示。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.88\textwidth]{../Sample/c535d246/mel_spectrogram.png}
+    \caption{Sample A的Mel语谱图（128频带）。纵轴变为Mel刻度——低频展宽（人声和旋律频段获得更高分辨率）、高频压缩。Sample A的Mel语谱图在低频区域的纹理差异比STFT中更为显著，因为Mel刻度将更多的表示容量分配给了感知上更重要的中低频段。}
+    \label{fig:mel}
+\end{figure}
+
+%────────────────────────────────────────────────────────────────────────────
+\FloatBarrier
+\subsection{步骤五：MFCC——参数化压缩}
+%────────────────────────────────────────────────────────────────────────────
+
+图\ref{fig:mfcc}是流水线的最终输出。DCT将频谱包络与精细结构分离后，仅保留前20个系数，数据量压缩至原始波形的数百分之一。两首歌的MFCC在低阶系数的明暗节律上存在差异——这反映了各自的主歌/副歌切换模式和响度动态特征的不同。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.88\textwidth]{../Sample/c535d246/mfcc_heatmap.png}
+    \caption{Sample A的MFCC热力图（20系数）。横轴时间帧，纵轴系数编号（0--19），颜色=系数值。低阶系数（$c_0$--$c_3$）的纵向明暗条纹对应主歌/副歌段落间的响度切换——ACG副歌段配器更密集、演唱力度更强。Sample A的MFCC在条纹节律和纹理密度上存在差异，反映了各自的段落结构特征。}
+    \label{fig:mfcc}
+\end{figure}
+
+%────────────────────────────────────────────────────────────────────────────
+\FloatBarrier
+\subsection{预测评估与双曲对比}
+%────────────────────────────────────────────────────────────────────────────
+
+完成上述五步流水线的单曲特征提取后，进一步对Sample A和Sample B进行多维度对比分析和模型预测评估。
+
+\FloatBarrier
+\subsubsection{预测与误差对比}
+
+在Mel均值序列预测任务中，同一模型在两首歌上的表现存在差异——不存在全局最优的预测模型，模型选择需因歌而异。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.88\textwidth]{../Sample/c535d246/prediction_comparison.png}
+    \caption{Sample A的Mel均值序列四模型预测对比。黑色虚线为真实值，彩色实线为各模型预测。两首歌中LSTM和Transformer均能跟踪总体走势，但HMM倾向于退化为常数预测，而ARIMA仅能呈现一些周期特征，但是无法体现走势}
+    \label{fig:pred_comp}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.88\textwidth]{../Sample/c535d246/error_comparison.png}
+    \caption{Sample A的四模型预测误差（RMSE、MAE）对比。Transformer和LSTM表现更加。但是RMSE和MAE或许并非此问题的更好研究指标，下文会补充说明}
+    \label{fig:error_comp}
+\end{figure}
+
+\FloatBarrier
+\subsubsection{频谱结构与动态趋势对比}
+
+两首歌在整体频谱轮廓上具有相似性（同一风格的作品），但在动态细节上存在可辨识的差异。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.88\textwidth]{../Sample/c535d246/discovery/contrast_panel.png}
+    \caption{Sample A与Sample B的自发现对比面板。两首歌在频谱结构、动态趋势和波动模式上进行了并排对比。同一歌手的作品在整体轮廓上具有相似性，但在具体的动态细节（如能量峰值的时间位置、节奏密度的分布）上存在差异。}
+    \label{fig:contrast}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.88\textwidth]{../Sample/c535d246/dynamics/dynamics_dual.png}
+    \caption{Sample A与Sample B的四维动态趋势（能量、亮度、复杂度、节奏）双曲叠加对比。两首歌的能量和亮度趋势走势具有大致相似的段落结构——反映了ACG音乐中常见的"主歌蓄力$\to$副歌爆发"的动态模式——但在节奏密度和复杂度的高频波动细节上各具特征。}
+    \label{fig:dynamics_dual}
+\end{figure}
+
+\FloatBarrier
+\subsection{本样本分析的其他工作}
+
+除上述核心流水线和双曲对比外，样本分析（c535d246）还执行了以下模块，方法细节在第3--4节中展开：
+
+\begin{itemize}[itemsep=2pt]
+    \item \textbf{ACF/PACF分析}：对两首歌的全曲波形分别计算300阶自相关与偏自相关函数，检验信号的时间依赖结构（方法见第3.1节）。
+    \item \textbf{周期性检测}：FFT主频率定位与ACF峰值搜索联合判断信号周期特征。
+    \item \textbf{波动率层（GARCH）}：提取四维动态趋势$\to$计算滚动波动率$\to$MLE拟合GARCH(1,1)$\to$输出模型参数与条件波动率序列（方法见第3.3节）。
+    \item \textbf{白噪声检验}：六项统计检验（Ljung-Box、Box-Pierce、Jarque-Bera、ACF置信区间法、方差平稳性、游程检验）多数投票判定信号是否退化为白噪声。
+    \item \textbf{频带可预测性分析}：128个Mel频带切分为四个子带独立建模预测并排序。
+\end{itemize}
+
+%══════════════════════════════════════════════════════════════════════════
+\FloatBarrier
+\section{音乐时间序列的结构规律}
+%══════════════════════════════════════════════════════════════════════════
+
+本章基于12个ACG音乐样本（Sample 1--12）执行三项独立实验，三项实验使用不同的时间序列数据作为输入。
+
+\FloatBarrier
+\subsection{实验一：全曲ACF/PACF自相关结构}
+
+\subsubsection{理论背景与地标设计}
+
+自相关函数（ACF）度量序列$\{x_t\}$与其$k$步延迟副本的线性相关强度\cite{box2015}：
+\begin{equation}
+    \rho_k = \frac{\sum_{t=k+1}^{n}(x_t-\bar{x})(x_{t-k}-\bar{x})}{\sum_{t=1}^{n}(x_t-\bar{x})^2},\qquad \rho_0\equiv 1
+    \label{eq:acf}
+\end{equation}
+偏自相关函数（PACF）通过求解Yule-Walker方程组剔除中间滞后阶的间接传递效应\cite{box2015}：
+\begin{equation}
+    \rho_k = \sum_{j=1}^{p}\phi_{pj}\,\rho_{k-j},\quad k=1,2,\ldots,p
+    \label{eq:yulewalker}
+\end{equation}
+其中$\phi_{pp}$即为滞后$p$阶的PACF值。AR($p$)过程PACF在$p$阶后截尾，MA($q$)过程ACF在$q$阶后截尾。
+
+\textbf{输入数据选择。}本实验以\textbf{原始波形全曲}（采样率16000 Hz的全部采样点，300阶ACF/PACF）为输入。选择理由：（1）ACF需采样点级精度（相邻间隔0.0625\,ms）以检测毫秒级自相关结构，Mel频谱帧间隔（32\,ms）将损失约500倍时间分辨率；（2）ACF穿越零线的振荡行为仅在正负交替的波形上才能充分展现，Mel能量等非负序列的ACF始终为正值；（3）使用全曲波形而非截断片段，使得更长尺度上的自相关结构得以显现。
+
+从每条ACF/PACF曲线提取六个可解释地标（表\ref{tab:landmarks}），将连续曲线压缩为可统计比较的标量。
+
+\begin{table}[htbp]
+    \centering
+    \caption{ACF/PACF六地标体系}
+    \label{tab:landmarks}
+    \small
+    \begin{tabularx}{\textwidth}{p{2.2cm}p{2cm}p{3.8cm}X}
+        \toprule
+        \textbf{地标} & \textbf{来源} & \textbf{操作定义} & \textbf{音乐声学解释} \\
+        \midrule
+        首次过零滞后 & ACF & $\rho_k$首次由正转负的$k$ & 信号反转时间——间接度量准周期长度 \\
+        首个负峰深度 & ACF & 负值区$\min\rho_k$ & 周期成分相对强度；越深周期越显著 \\
+        衰减滞后 & ACF & $\rho_k$进入$\pm1.96/\sqrt{n}$置信带 & 有效记忆时长——之后无统计显著自相关 \\
+        ACF lag1 & ACF & $\rho_1$值 & 单步记忆强度（相邻采样平滑度） \\
+        AR阶数 & PACF & 显著非零PACF最大$k$ & 结构复杂度——直接依赖的历史步数 \\
+        主导PACF滞后 & PACF & $|\phi_{kk}|$取最大值时的$k$ & 最强直接效应的时间距离 \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+\FloatBarrier
+\subsubsection{全曲分析结果}
+
+12个样本的全曲ACF/PACF地标统计如表\ref{tab:acf_stats}所示。全曲尺度下，过零滞后均值约44阶（约2.75\,ms），AR阶数均值达159阶——当前采样点直接依赖超过150步历史值，波形呈现高阶AR过程特征。衰减滞后均值284阶（约17.75\,ms），表明全曲分析能捕获跨越数百阶的中观自相关结构。个别样本的AR阶数达到或接近300阶分析上限，提示全曲波形具有极其复杂的短期依赖结构。
+
+\begin{table}[htbp]
+    \centering
+    \caption{12样本全曲ACF/PACF地标统计（300阶）}
+    \label{tab:acf_stats}
+    \begin{tabular}{lccc}
+        \toprule
+        \textbf{地标} & \textbf{均值} & \textbf{最小值} & \textbf{最大值} \\
+        \midrule
+        首次过零滞后 & 43.9 & 26 & 75 \\
+        首个负峰滞后 & 54.4 & 33 & 84 \\
+        AR阶数（PACF） & 158.9 & 3 & 299 \\
+        衰减滞后 & 284.2 & 197 & 300 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+部分样本在高阶PACF估计中出现超出$[-1,1]$理论区间的数值（如Sample6 domPACF@278=50.960、Sample 8 domPACF@128=$-$25.695），指示Yule-Walker方程在极高阶数+有限样本条件下的数值不稳定。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.9\textwidth]{../Sample/5/T1_acf_pacf_overlay.png}
+    \caption{12样本全曲ACF叠加（灰线）及均值包络（黑线）。全曲ACF过零滞后$\approx$44阶，振荡包络衰减缓慢，揭示了长程自相关结构。}
+    \label{fig:acf_env}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.9\textwidth]{../Sample/5/T1_acf_landmarks.png}
+    \caption{四首代表性样本的全曲ACF及六地标标注。不同样本ACF形态在全曲尺度上差异显著——反映了音乐结构复杂度在自相关维度上的个体化特征。}
+    \label{fig:acf_landmarks}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\textwidth]{../Sample/5/T1_pacf_structure.png}
+    \caption{AR阶数直方图（左）与主导PACF滞后散点图（右）。全曲AR阶数中心$\approx$159阶，大量样本接近300阶分析上限，反映全曲波形的复杂依赖结构。}
+    \label{fig:pacf_struct}
+\end{figure}
+
+\FloatBarrier
+\subsection{实验二：四模型预测能力对比}
+
+\subsubsection{理论背景与评估设计}
+
+\textbf{输入数据。}预测目标为\textbf{Mel语谱图的逐帧均值序列}$\{\bar{S}_{\text{mel}}[t]\}$——每帧$t$在128个Mel频带上的算术均值。选择理由：（1）Mel刻度贴近人耳感知\cite{davis1980}；（2）均值保留宏观能量走势同时大幅降维。回溯窗口自适应：总帧数$<$60取10帧，60--360取帧数$/6$，$\geq$360取60帧；预测视野$=\min($测试帧数$,200)$。
+
+传统RMSE无法区分"学到规律"与"猜测均值"。增设四项规律学习指标：
+\begin{equation}
+    \text{Diff-RMSE} = \sqrt{\frac{1}{n}\sum(\Delta y_t-\Delta\hat{y}_t)^2},\quad
+    \text{DirAcc} = \frac{1}{n}\sum\mathbb{1}[\text{sgn}(\Delta y_t)=\text{sgn}(\Delta\hat{y}_t)]
+    \label{eq:extra_metrics}
+\end{equation}
+\begin{equation}
+    \text{DiffCorr} = \text{corr}(\Delta y_t,\Delta\hat{y}_t),\quad
+    \text{Peak Jaccard} = \frac{|\mathcal{P}_{\text{true}}\cap\mathcal{P}_{\text{pred}}|}{|\mathcal{P}_{\text{true}}\cup\mathcal{P}_{\text{pred}}|}
+    \label{eq:extra_metrics2}
+\end{equation}
+
+\textbf{四个模型。}ARIMA(p,d,q)为线性模型\cite{box2015}：$\phi(B)(1-B)^d x_t = \theta(B)\varepsilon_t$，$(p,q)$通过最小化AIC$=2k-2\ln\hat{L}$自动搜索。HMM以一阶马尔可夫隐状态链生成观测\cite{rabiner1989}，Baum-Welch算法估计参数。LSTM通过门控单元维护长程记忆\cite{hochreiter1997}：
+\begin{equation}
+    f_t = \sigma(W_f[h_{t-1},x_t]+b_f),\quad
+    i_t = \sigma(W_i[h_{t-1},x_t]+b_i)
+    \label{eq:lstm_gates}
+\end{equation}
+\begin{equation}
+    c_t = f_t\odot c_{t-1} + i_t\odot\tanh(W_c[h_{t-1},x_t]+b_c)
+    \label{eq:lstm_cell}
+\end{equation}
+Transformer以缩放点积注意力替代循环\cite{vaswani2017}：
+\begin{equation}
+    \text{Attention}(Q,K,V) = \text{softmax}\!\left(\frac{QK^T}{\sqrt{d_k}}\right)V
+    \label{eq:attention}
+\end{equation}
+本实验LSTM为2层$\times$64单元（dropout=0.2），Transformer为$d_{\text{model}}=64$、$h=4$头、2层编码器。四模型颜色编码：\textbf{ARIMA=蓝，HMM=绿，LSTM=红，Transformer=橙}。
+
+\FloatBarrier
+\subsubsection{聚合结果}
+
+\begin{table}[htbp]
+    \centering
+    \caption{四模型在12样本上的聚合指标}
+    \label{tab:four_models}
+    \begin{tabular}{lccccc}
+        \toprule
+        \textbf{模型} & \textbf{Train RMSE} & \textbf{Test RMSE} & \textbf{Diff-RMSE} & \textbf{DirAcc} & \textbf{DiffCorr} \\
+        \midrule
+        ARIMA & 1.634 & 42540.057 & 84863.347 & 0.544 & 0.096 \\
+        HMM & 1.634 & 3.681 & 1.274 & \textbf{0.000} & \textbf{0.000} \\
+        LSTM & 1.634 & \textbf{3.075} & 1.424 & 0.446 & -0.109 \\
+        Transformer & 1.634 & 3.158 & 1.450 & \textbf{0.529} & \textbf{0.103} \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+\vspace{-6pt}
+{\footnotesize \textit{注：}ARIMA的Test RMSE与Diff-RMSE受Sample 3灾难性崩溃影响（该样本单点RMSE=510443），排除异常值后ARIMA Test RMSE约为3.5，与其他模型处于同一量级。}
+
+Train RMSE四模型一致（1.634）= persistence基线$\hat{y}_{t+1}=y_t$。HMM的Test RMSE=3.681（排名第二）但DirAcc$\equiv$0——预测输出为常数序列（方差为零），完全未学到变化规律。\textbf{低RMSE不等于学到规律：此为本实验核心警示。}ARIMA聚合RMSE被Sample 3的灾难性崩溃所拉高（单样本RMSE=510443，其余三模型仅4.4--7.6）——线性假设被严重违反时ARIMA可无预警失效。
+
+排除HMM后，LSTM在数值精度上占优（RMSE=3.075，Diff-RMSE=1.424）但DiffCorr为负（$-0.109$）——变化方向有轻微系统性反向。ARIMA的DirAcc=0.544为四模型最高，但其聚合RMSE被Sample 3（ClariS-コネクト）的灾难性崩溃所拉高（单样本RMSE=510443），在实际应用中可靠性存疑。Transformer在差分相关性（DiffCorr=0.103）和Peak Jaccard（0.139）上领先——在排除ARIMA不稳定因素后，Transformer确实学到了涨跌方向，代价是绝对数值精度略有妥协（RMSE=3.158 vs LSTM 3.075）。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.9\textwidth]{../Sample/ts_law_discovery3/T2_true_vs_all_predictions.png}
+    \caption{真实Mel均值（黑线）与四模型预测。HMM（绿）测试区退化为水平线；Transformer（橙）拐点方向响应最优。}
+    \label{fig:pred_all}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.9\textwidth]{../Sample/ts_law_discovery3/T2_model_metrics_comparison.png}
+    \caption{五指标$\times$四模型。LSTM（红）DirAcc显著领先；HMM（绿）DirAcc/DiffCorr柱缺失（=0）。}
+    \label{fig:metrics_bar}
+\end{figure}
+
+\FloatBarrier
+\subsection{实验三：GARCH波动率聚集检验}
+
+\subsubsection{理论背景与输入选择}
+
+Bollerslev的GARCH(1,1)模型\cite{bollerslev1986}将条件方差建模为：
+\begin{equation}
+    \sigma_t^2 = \omega + \alpha\varepsilon_{t-1}^2 + \beta\sigma_{t-1}^2
+    \label{eq:garch}
+\end{equation}
+其中$\omega>0$为基线波动，$\alpha\geq0$捕捉新息冲击，$\beta\geq0$为波动率惯性。$\alpha+\beta$趋近1=强持久性（波动率记忆长），趋近0=波动近似独立。参数通过最大似然估计（MLE）拟合，标准化残差以Ljung-Box检验\cite{ljung1978}诊断模型充分性：
+\begin{equation}
+    Q = n(n+2)\sum_{k=1}^{h}\frac{\hat{\rho}_k^2}{n-k}\stackrel{H_0}{\sim}\chi^2_h
+    \label{eq:ljungbox}
+\end{equation}
+$H_0$：残差为白噪声（模型充分捕捉序列依赖）；$p<0.05$拒绝$H_0$——残差遗留未解释结构。
+
+\textbf{输入数据。}本实验以\textbf{动态分析模块导出的能量趋势序列}$\{E_t\}$为输入——从Mel频谱每帧提取RMS值形成能量包络后平滑得到。选择理由：能量趋势中主歌$\to$副歌的能量跃升形成清晰的条件异方差模式，适合GARCH建模；原始波形振幅变化过于频繁（正负交替、毫秒级），Mel均值经大面积平滑后波动率结构被部分抹除，两者均不如能量趋势序列适合。
+
+\FloatBarrier
+\subsubsection{结果}
+
+\begin{table}[htbp]
+    \centering
+    \caption{GARCH(1,1)检验结果}
+    \label{tab:garch_summary}
+    \begin{tabular}{lc}
+        \toprule
+        \textbf{统计项} & \textbf{数值} \\
+        \midrule
+        有效样本 & 12 \\
+        平均$\alpha+\beta$ & 0.801 \\
+        $\alpha+\beta>0.9$占比 & 6/12（50\%） \\
+        GARCH收敛率 & 100\%（12/12） \\
+        Ljung-Box残差白噪声通过率 & \textbf{0\%}（全部$p<0.001$） \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\textbf{确认性发现。}音乐能量波动存在显著的波动率聚集——均值0.801与金融收益率序列（0.85--0.95）处于同量级。效应有显著异质性：Sample 3的$\alpha+\beta=0.995$逼近协方差平稳边界，而Sample 1（电子舞曲）仅0.500——人工编排的段落切换减少了自然波动率自激，低值恰好从反面验证GARCH的判别有效性。
+
+\textbf{限制性发现。}全部样本残差拒绝白噪声假设——GARCH(1,1)不完整。残差中可能遗留长记忆效应（需FIGARCH）、非对称响应（需EGARCH/GJR-GARCH）或体制转换（需Markov-switching GARCH）。"所有残差非白噪声"本身即是有价值的结论：音乐波动率结构比标准金融时序更复杂。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.9\textwidth]{../Sample/ts_law_discovery3/T3_volatility_bands.png}
+    \caption{能量趋势及$\pm1\sigma$波动率带。灰色带宽随段落变化——高潮段展宽（条件方差大）、安静段收窄（条件方差小）。}
+    \label{fig:vol_bands}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.9\textwidth]{../Sample/ts_law_discovery3/T3_persistence_by_trend.png}
+    \caption{12样本四趋势GARCH持久性。能量维度持久性最高，节奏维度样本间离散最大。}
+    \label{fig:persist_trend}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.9\textwidth]{../Sample/ts_law_discovery3/T3_garch_validation.png}
+    \caption{左：$\alpha+\beta$直方图（峰值0.9--1.0、尾端至0.5）。右：残差Ljung-Box p值——全聚于零。}
+    \label{fig:garch_val}
+\end{figure}
+
+
+\subsubsection{Sample 3的跨任务诊断}
+
+\begin{table}[htbp]
+    \centering
+    \caption{Sample 3跨三项实验诊断档案}
+    \label{tab:sample3}
+    \small
+    \begin{tabularx}{\textwidth}{l>{\raggedright\arraybackslash}p{3.5cm}X}
+        \toprule
+        \textbf{实验} & \textbf{关键指标} & \textbf{结构诊断} \\
+        \midrule
+        ACF/PACF（采样点级） & 衰减滞后较短（lag 213）、AR阶数接近上限（299） & 全曲波形记忆极长且复杂 \\
+        模型预测（帧级） & ARIMA RMSE=510443 & 线性假设被严重违反；LSTM/Transformer正常 \\
+        GARCH（趋势级） & $\alpha+\beta=0.995$ & 能量波动率记忆趋近永久——强非线性自驱动 \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+三个时间尺度上的信号结构彼此解耦——\textbf{单尺度分析无法完整刻画音乐规律}，多尺度联合是必要的方法论条件。
+
+%══════════════════════════════════════════════════════════════════════════
+\FloatBarrier
+\section{十个流派的跨维度对比}
+%══════════════════════════════════════════════════════════════════════════
+
+对蓝调、古典、乡村、迪斯科、嘻哈、爵士、金属、流行、雷鬼、摇滚十类各10首共100个30秒WAV样本（16000 Hz，GTZAN\cite{tzanetakis2002}）进行五阶段流水线分析。
+
+\subsection{动态特征}
+
+\begin{table}[htbp]
+    \centering
+    \caption{流派动态特征均值（括号内为CV）}
+    \label{tab:genre_dyn}
+    \small
+    \begin{tabularx}{\textwidth}{lXXXX}
+        \toprule
+        \textbf{流派} & \textbf{能量} & \textbf{亮度（Hz）} & \textbf{复杂度} & \textbf{节奏} \\
+        \midrule
+        Pop & \textbf{0.225} (.069) & 2158 (.046) & 10.70 (.013) & \textbf{.0112} (.302) \\
+        Hip-Hop & .181 (.166) & 2019 (.064) & 10.73 (.016) & .0068 (.768) \\
+        Rock & .151 (.038) & 1929 (.069) & 10.62 (.019) & .0074 (.871) \\
+        Blues & .138 (.446) & 1835 (.222) & 10.36 (.052) & .0057 (.775) \\
+        Metal & .134 (.061) & \textbf{2331} (.028) & \textbf{10.98} (.010) & .0085 (1.200) \\
+        Disco & .134 (.049) & 2086 (.035) & 10.81 (.007) & .0049 (.620) \\
+        Reggae & .116 & 1901 & 10.50 & .0041 \\
+        Country & .112 & 1647 & 10.09 & .0021 \\
+        Jazz & .075 (.105) & 1294 (.076) & 9.60 (.013) & .0008 (1.010) \\
+        Classical & \textbf{.039} (.209) & \textbf{1224} (.092) & \textbf{9.59} (.014) & \textbf{.0002} (.841) \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+Pop能量为Classical的5.8倍，直观量化了"响度战争"的后果。Metal亮度（2331 Hz）和复杂度（10.98）双居首位且内部高度一致（CV=0.028、0.010）——失真吉他与镲片的频谱指纹在子流派间高度统一。Disco复杂度CV=0.007（最低）——制作标准化程度最高。Blues能量CV=0.446（最高）——流派内响度变幅最大。Metal和Jazz的节奏CV均超1.0——标准差大于均值，节奏模式极为多样。
+
+\subsection{复杂度与可预测性}
+
+频谱平坦度SF$=\exp(\frac{1}{N}\sum\ln S_k)/\frac{1}{N}\sum S_k$将流派分为两个区间：Classical（0.214）和Jazz（0.247）为原声端（强音调性），Metal（0.475）和Pop（0.469）为电子/失真端（频谱填充均匀）。Metal零交叉率最高（0.371），Jazz最低（0.151）。
+
+\begin{table}[htbp]
+    \centering
+    \caption{Mel均值预测的流派RMSE排名}
+    \label{tab:pred_rank}
+    \small
+    \begin{tabularx}{\textwidth}{lccX}
+        \toprule
+        \textbf{流派} & \textbf{最优模型} & \textbf{RMSE} & \textbf{RMSE标准差} \\
+        \midrule
+        Metal & ARIMA & \textbf{3.42} & 1.83 \\
+        Disco & ARIMA & 4.24 & \textbf{0.999} \\
+        Pop & ARIMA & 4.56 & 0.92 \\
+        Rock & Transformer & 4.56 & 1.80 \\
+        Blues & LSTM & 4.76 & 2.53 \\
+        Country & ARIMA & 4.90 & -- \\
+        Hip-Hop & ARIMA & 5.17 & 1.14 \\
+        Classical & ARIMA & 5.45 & 2.63 \\
+        Reggae & ARIMA & 5.65 & -- \\
+        Jazz & Transformer & \textbf{7.44} & \textbf{5.15} \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+Metal预测最优（RMSE=3.42）而Jazz最差（7.44）——预测难易取决于\textbf{时间维度规律性}（Metal双踩脉冲+RIFF循环=强周期，Jazz即兴=无固定周期），而非频谱维度复杂度。Disco的RMSE标准差0.999——预测一致性最高；Jazz的5.15——因曲而异。ARIMA在7/10流派胜出（线性依赖为主），Transformer在Jazz和Rock上胜出（跨段落非局部依赖），LSTM在Blues上胜出（周期性与即兴的折中）。
+
+\subsection{频带可预测性}
+
+Disco=100\%低频最佳——四四拍底鼓（60--120 Hz）和贝斯线（80--250 Hz）创造了最规律的周期脉冲。Classical接近均匀分布（4:3:0:3）——交响全频带配器的反映。Rock高频占比30\%最高——失真吉他和镲片的高频成分具可预测结构。
+
+\FloatBarrier
+\subsection{无监督结构发现}
+
+HMM在全部样本上自动识别3状态隐结构（区分度$>$97\%），Metal独有第4状态（安静段/Calm，23.5\%）。结构段检测发现所有30秒片段均含8变点$\to$9段落（均段3.3 s）——独立于流派的普适微观结构模板。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.9\textwidth]{../genre_analysis/classify_results/U04_acf_by_genre.png}
+    \caption{十流派平均ACF。Metal/Disco衰减最快（短记忆），Classical/Jazz衰减最慢（长记忆）。}
+    \label{fig:acf_genre}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\textwidth]{../genre_analysis/classify_results/U05_feature_boxplots_by_genre.png}
+    \caption{ACF lag1、GARCH持久性、ZCR等关键TS特征按流派箱线图。}
+    \label{fig:boxplots}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\textwidth]{../genre_analysis/classify_results/U06_acf_decay_by_genre.png}
+    \caption{ACF lag1与半衰期的流派排序——时间依赖剖面的双维度刻画。}
+    \label{fig:acf_decay}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\textwidth]{../genre_analysis/classify_results/U07_genre_separability.png}
+    \caption{Silhouette分数（全$<$0.5）与类内/类间分离度。类内方差大+类间距离小=分类困难的结构原因。}
+    \label{fig:separability}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.9\textwidth]{../genre_analysis/classify_results/U08_signal_structure_by_genre.png}
+    \caption{白噪声得分、平稳性、GARCH持久性的流派分布。Classical平稳性变异最大。}
+    \label{fig:signal_struct}
+\end{figure}
+
+%══════════════════════════════════════════════════════════════════════════
+\FloatBarrier
+\section{时间序列特征工程与流派分类}
+%══════════════════════════════════════════════════════════════════════════
+
+\subsection{124维特征体系与设计逻辑}
+
+本实验输入为\textbf{每首歌曲的124维时间序列特征向量}——七个大类的标量统计量聚合（ACF 20维 + PACF 20维 + 动态趋势28维 + 波动率/GARCH 16维 + 周期性3维 + 复杂度2维 + 频谱形状4维 + 白噪声检验7维 + ARIMA 24维）。设计逻辑：仅用经典可解释TS特征，考察其是否已携带充分的流派判别信息，无需深度学习黑箱。特征提取120首耗时约20分钟，瓶颈在GARCH MLE和ARIMA AIC网格搜索。
+
+\FloatBarrier
+\subsection{无监督投影}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\textwidth]{../genre_analysis/classify_results/U01_pca_projection.png}
+    \caption{PCA投影（124$\to$2维）。Classical/Jazz形成独立簇，Blues/Country/Rock中心区严重交叠。}
+    \label{fig:pca}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\textwidth]{../genre_analysis/classify_results/U02_tsne_projection.png}
+    \caption{t-SNE投影。Classical/Jazz各自收敛，Blues/Rock/Country依旧交织——在124维原始空间中确实邻近。}
+    \label{fig:tsne}
+\end{figure}
+
+\FloatBarrier
+\subsection{分类结果}
+
+\begin{table}[htbp]
+    \centering
+    \caption{五分类器测试结果（20首测试集）}
+    \label{tab:classifiers}
+    \begin{tabular}{lccc}
+        \toprule
+        \textbf{分类器} & \textbf{准确率} & \textbf{F1宏平均} & \textbf{耗时} \\
+        \midrule
+        SVM（RBF核） & 0.35 & 0.308 & 0.01s \\
+        逻辑回归 & 0.40 & 0.413 & 0.04s \\
+        \textbf{随机森林} & \textbf{0.45} & \textbf{0.440} & 0.19s \\
+        梯度提升 & 0.40 & 0.380 & 3.81s \\
+        MLP（128$\to$64，ReLU） & 0.40 & 0.383 & 0.28s \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+随机森林45\% = 随机基线10\%的4.5倍。逻辑回归与非线性模型仅差5个百分点——线性可分成分为主。在仅用可解释TS特征、无深度学习的严格约束下，45\%构成了实质性基线。PACF lag4/lag2进入特征重要性Top 10（分别第6/7位），为"自相关结构携带流派判别信息"提供量化证据。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\textwidth]{../genre_analysis/classify_results/C02_model_comparison.png}
+    \caption{五分类器准确率与F1对比。随机森林两项最优。}
+    \label{fig:model_comp}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.9\textwidth]{../genre_analysis/classify_results/C03_feature_importance.png}
+    \caption{特征重要性Top 20。频谱平坦度（0.030）首位，PACF lag4/lag2第6/7位。Top 20横跨七个大类中的六个。}
+    \label{fig:importance}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\textwidth]{../genre_analysis/classify_results/C04_aggregated_confusion.png}
+    \caption{五分类器聚合混淆矩阵。Blues$\leftrightarrow$Rock和Disco$\leftrightarrow$Pop为最稳定的混淆对——特征空间中的真实邻近。}
+    \label{fig:confusion}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.9\textwidth]{../genre_analysis/classify_results/C05_per_classifier_f1_heatmap.png}
+    \caption{五分类器$\times$十流派F1热力图。Classical列整体最亮，Blues/Rock列最暗。}
+    \label{fig:f1_heatmap}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\textwidth]{../genre_analysis/classify_results/C06_feature_category_importance.png}
+    \caption{特征大类重要性分组。动态趋势与频谱贡献最大，白噪声检验和周期性贡献较小。}
+    \label{fig:cat_importance}
+\end{figure}
+
+\FloatBarrier
+\subsection{局限与展望}
+
+\subsubsection*{硬件约束与规模化限制}
+
+本实验全部运行于单机环境（Intel Core i7-10870H CPU + RTX 3060 Laptop GPU + 16 GB RAM），硬件配置限制了以下方面的扩展能力：
+
+\begin{enumerate}[itemsep=2pt]
+    \item \textbf{数据规模受限}：当前实验仅使用12个ACG音乐样本进行结构规律发现、100个GTZAN样本进行流派分类，无法支撑大规模数据集（如Million Song Dataset或Spotify的数亿曲目库）上的统计分析。全曲300阶ACF/PACF计算（12样本耗时约140秒）在万级样本上将面临显著的内存和时间压力。
+    \item \textbf{深度学习训练受限}：LSTM和Transformer模型限于2层/64单元的小规模配置，无法探索更大容量架构（如多层Transformer+预训练微调范式）在音乐时序建模中的潜力。RTX 3060 Laptop GPU的显存（6 GB）限制了批量训练规模和更长序列的处理能力。
+    \item \textbf{特征工程效率瓶颈}：124维特征的提取全程CPU绑定（ACF/PACF、GARCH MLE、ARIMA AIC网格搜索），120首歌曲的特征提取耗时约20分钟。若扩展至万级以上样本，需要引入并行化流水线或GPU加速的时序特征提取工具。
+\end{enumerate}
+
+\subsubsection*{方法论局限}
+
+除硬件约束外，本研究还存在以下方法论层面的局限性：
+
+\begin{enumerate}[itemsep=2pt]
+    \item 样本量（100训练/124维/10分类=小$n$大$p$）约束了分类性能的统计学可靠性。
+    \item 30秒片段仅覆盖完整歌曲1--2个段落，段落级异质性以噪声形式注入流派标签。
+    \item 流派标签本身是离散近似——现代音乐跨界融合使混淆呈结构性。
+    \item 特征工程将完整ACF曲线和条件波动率轨迹压缩为少数标量，可解释性在此以信息损失为代价。
+    \item PACF高阶数值溢出和ARIMA不稳定定阶构成上游噪声源。
+\end{enumerate}
+
+\subsubsection*{未来研究方向}
+
+基于本研究的发现，以下几个方向值得进一步探索：
+
+\begin{enumerate}[itemsep=2pt]
+    \item \textbf{音乐生成质量评估}：将本文提出的ACF/PACF六地标体系和GARCH波动率指标应用于AI生成音乐的质量评估——检测生成音频是否存在异常的自相关结构或缺失的波动率聚集效应，为AI音乐质量提供客观的时序维度评价指标。
+    \item \textbf{基于时序特征的音乐推荐系统}：利用124维时间序列特征构建用户偏好模型，替代或补充现有推荐系统中基于元数据和协同过滤的方案——用户可能更偏好特定ACF衰减模式或GARCH持久性的音乐，而不仅是流派标签。
+    \item \textbf{大规模验证与模型升级}：在更大规模数据集上重复本实验框架，验证ACF/PACF地标的普适性；同时将LSTM/Transformer升级至更大规模的预训练架构，探索端到端学习是否能超越手工设计的时序特征。
+    \item \textbf{GARCH变体拓展}：针对音乐波动率结构的复杂性（全部残差拒绝白噪声），尝试FIGARCH（长记忆）、EGARCH（非对称）或Markov-switching GARCH（体制转换）等扩展模型，以期更完整地刻画音乐能量的条件异方差行为。
+\end{enumerate}
+
+%══════════════════════════════════════════════════════════════════════════
+\FloatBarrier
+\section{总结}
+%══════════════════════════════════════════════════════════════════════════
+
+本文从信号流水线、结构规律、流派对比和特征分类四个层级对音乐音频进行了系统性时间序列分析。
+
+\textbf{主要结果。（1）}\textbf{首次提出}ACF/PACF六地标体系（300阶），揭示了全曲尺度的衰减振荡自相关结构（过零滞后均值43.9，AR阶数均值158.9），分析窗口延长使更长程的自相关结构得以显现，多数样本AR阶数接近300阶分析上限。\textbf{（2）}\textbf{首次验证}音乐信号的GARCH波动率聚集效应（平均$\alpha+\beta=0.801$，半数$>$0.9），但全部残差拒绝白噪声——波动率结构较标准金融模型更复杂。\textbf{（3）}RMSE单一指标具有系统性误导性——HMM以RMSE=3.68掩盖常数输出事实（DirAcc=0）；ARIMA方向准确率最高（0.544）但被单样本崩溃拉高聚合RMSE；Transformer在差分相关性（DiffCorr=0.103）上领先，而LSTM数值精度占优（RMSE=3.075）但DiffCorr为负（$-0.109$）。\textbf{（4）}Metal预测最优（ARIMA RMSE=3.42），Jazz最差（7.44），预测难易由时间规律性而非频谱复杂度决定。\textbf{（5）}124维纯TS特征在随机森林上取得45\%流派判别准确率，频谱平坦度和PACF位列特征重要性前列。
+
+\textbf{展望。}本研究建立了音乐时间序列分析的系统性实验框架，但受限于硬件配置和数据规模，诸多结论尚待在大规模数据集上进一步验证。未来工作可将本方法应用于AI音乐生成质量评估、基于时序特征的音乐推荐系统构建，以及更大规模深度学习模型的探索，推动时间序列分析方法论在音乐信号处理领域的深入应用。
+
+\vspace{10pt}
+
+\begin{center}
+\rule{0.5\textwidth}{0.4pt}
+\vspace{6pt}
+{\small 基于Audio Lab平台。工具链：Python 3.8+，Librosa\cite{mcfee2015}，PyTorch，scikit-learn。\\
+硬件：Intel Core i7-10870H CPU + NVIDIA RTX 3060 Laptop GPU（6 GB显存）+ 16 GB RAM。\\
+样本：ACG音乐（12样本）及GTZAN数据集\cite{tzanetakis2002}（100样本，10流派），均已匿名化处理。\\
+实验耗时参考：全曲300阶ACF/PACF（12样本）约140秒；3秒片段完整流程（12样本）约772秒（约13分钟）；\\
+124维特征提取（120样本）约20分钟。}
+\end{center}
+
+\begin{thebibliography}{99}
+\bibitem{box2015} G.~E.~P.~Box et al.\ \textit{Time Series Analysis: Forecasting and Control}, 5th ed.\ Wiley, 2015.
+\bibitem{bollerslev1986} T.~Bollerslev.\ ``Generalized Autoregressive Conditional Heteroskedasticity.''\ \textit{Journal of Econometrics}, 31(3):307--327, 1986.
+\bibitem{rabiner1989} L.~R.~Rabiner.\ ``A Tutorial on Hidden Markov Models.''\ \textit{Proceedings of the IEEE}, 77(2):257--286, 1989.
+\bibitem{hochreiter1997} S.~Hochreiter and J.~Schmidhuber.\ ``Long Short-Term Memory.''\ \textit{Neural Computation}, 9(8):1735--1780, 1997.
+\bibitem{vaswani2017} A.~Vaswani et al.\ ``Attention Is All You Need.''\ \textit{Advances in Neural Information Processing Systems}, 30:5998--6008, 2017.
+\bibitem{davis1980} S.~Davis and P.~Mermelstein.\ ``Comparison of Parametric Representations for Monosyllabic Word Recognition in the IEEE Trans.\ ASSP.'' \textit{IEEE Transactions on Acoustics, Speech, and Signal Processing}, 28(4):357--366, 1980.
+\bibitem{ljung1978} G.~M.~Ljung and G.~E.~P.~Box.\ ``On a Measure of Lack of Fit in Time Series Models.''\ \textit{Biometrika}, 65(2):297--303, 1978.
+\bibitem{richman2000} J.~S.~Richman and J.~R.~Moorman.\ ``Physiological Time-Series Analysis Using Approximate Entropy and Sample Entropy.''\ \textit{American Journal of Physiology---Heart and Circulatory Physiology}, 278(6):H2039--H2049, 2000.
+\bibitem{tzanetakis2002} G.~Tzanetakis and P.~Cook.\ ``Musical Genre Classification of Audio Signals.''\ \textit{IEEE Transactions on Speech and Audio Processing}, 10(5):293--302, 2002.
+\bibitem{mcfee2015} B.~McFee et al.\ ``librosa: Audio and Music Signal Analysis in Python.''\ \textit{Proceedings of the 14th Python in Science Conference}, pp.\ 18--25, 2015.
+\end{thebibliography}
+
+\end{document}

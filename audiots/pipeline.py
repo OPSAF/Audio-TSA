@@ -131,29 +131,29 @@ def _phase_timeseries(results: dict, y: np.ndarray, sr: int,
                       log: Callable) -> None:
     results['timeseries'] = {}
 
+    # Use full waveform for all time-series analyses (was previously truncated to 1-2s)
     wav = results.get('features', {}).get('waveform', {}).get('y', y)
-    acf_in = wav[:min(len(wav), sr * 1)]
 
-    log("[2.1] ACF & PACF", 'info')
-    lags, acf_vals, ci = analysis.compute_acf(acf_in, nlags=40)
-    _, pacf_vals, _ = analysis.compute_pacf(acf_in, nlags=40)
+    log("[2.1] ACF & PACF")
+    acf_nlags = 300
+    lags, acf_vals, ci = analysis.compute_acf(wav, nlags=acf_nlags)
+    _, pacf_vals, _ = analysis.compute_pacf(wav, nlags=acf_nlags)
     results['timeseries']['acf_pacf'] = {
         'lags': lags, 'acf': acf_vals, 'pacf': pacf_vals, 'ci': ci}
 
-    log("[2.2] 周期性", 'info')
+    log("[2.2] 周期性")
     results['timeseries']['periodicity'] = analysis.analyze_periodicity(y, sr)
 
-    log("[2.3] 复杂度", 'info')
+    log("[2.3] 复杂度")
     results['timeseries']['complexity'] = analysis.analyze_complexity(y)
 
-    log("[2.4] 频谱平坦度", 'info')
+    log("[2.4] 频谱平坦度")
     fft_mag = results.get('features', {}).get('fft', {}).get('mag',
                 features.compute_fft(y, sr)[1])
     results['timeseries']['spectral_flatness'] = analysis.compute_spectral_flatness(fft_mag)
 
-    log("[2.5] 白噪声检验", 'info')
-    results['timeseries']['white_noise_test'] = analysis.test_white_noise(
-        wav[:min(len(wav), sr * 2)])
+    log("[2.5] 白噪声检验")
+    results['timeseries']['white_noise_test'] = analysis.test_white_noise(wav)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -1,12 +1,14 @@
+# Python
 __pycache__/
-outputs/
-uploads/
-static/
-Data/
-experiments/
-experiment.json
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
 
-# 音频文件
+# 音频文件（数据集）
 *.wav
 *.mp3
 *.flac
@@ -15,8 +17,64 @@ experiment.json
 *.m4a
 *.wma
 
-# 测试数据与结果（体积大）
+# 数据集目录
+Data/
+uploads/
+outputs/
 test_data/
+experiments/
+
+# 实验结果与输出（图片、JSON、日志）
 results/
 test_results/
 test_results2/
+test_single_out/
+ts_law_discovery/
+ts_law_discovery2/
+ts_law_discovery3/
+ts_law_discovery4/
+ts_law_discovery5/
+
+# LA/Sample 下的实验输出（图片、报告、日志）
+LA/Sample/*/T1_*.png
+LA/Sample/*/*.png
+LA/Sample/*/*.json
+LA/Sample/*/*.txt
+LA/Sample/*/discovery/
+LA/Sample/*/dynamics/
+LA/Sample/*/volatility/
+
+# LA/genre_analysis 结果
+LA/genre_analysis/classify_results/*.png
+LA/genre_analysis/classify_results/*.json
+LA/genre_analysis/logs/
+LA/genre_analysis/md/
+
+# LaTeX 编译产物（保留 .tex 源文件）
+LA/report/*.aux
+LA/report/*.log
+LA/report/*.toc
+LA/report/*.out
+LA/report/*.pdf
+LA/report/*.fdb_latexmk
+LA/report/*.fls
+LA/report/*.synctex.gz
+
+# IDE / 编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Trae IDE
+.trae/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 测试文件
+test.txt
+ex.md

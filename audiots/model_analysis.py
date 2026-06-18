@@ -345,13 +345,18 @@ def analyze_arima_insights(dynamics: Dict) -> ArimaInsights:
     nonstationary = [k for k, v in per_trend.items()
                      if v.trend_type in ("random-walk", "trending")]
 
+    # Build mutually-exclusive summary (structured vs white-noise, with nonstationary subset)
     parts = []
     if structured:
         parts.append(f"有线性结构的维度: {', '.join(structured)}")
+        # Nonstationary is a subset of structured
+        if nonstationary:
+            stationary_structured = [k for k in structured if k not in nonstationary]
+            if stationary_structured:
+                parts.append(f"其中平稳维度: {', '.join(stationary_structured)}")
+            parts.append(f"非平稳维度: {', '.join(nonstationary)}")
     if white_noise:
-        parts.append(f"接近随机的维度: {', '.join(white_noise)}")
-    if nonstationary:
-        parts.append(f"非平稳维度: {', '.join(nonstationary)}")
+        parts.append(f"接近白噪声的维度: {', '.join(white_noise)}（无显著线性结构）")
     if not parts:
         parts.append("所有维度均缺乏显著的线性结构")
 
@@ -1137,11 +1142,15 @@ def _compose_ensemble_summary(
     # ARIMA
     if arima and arima.per_trend:
         structured = [k for k, v in arima.per_trend.items()
-                      if v.trend_type not in ("white-noise", "too_short", "no_model")]
+                      if v.trend_type not in ("white-noise", "too_short", "no_model", "unclear")]
+        white_noise = [k for k, v in arima.per_trend.items() if v.trend_type == "white-noise"]
         if structured:
             parts.append(
                 f"ARIMA 发现 {', '.join(structured)} 维度具有线性结构"
-                f"（AR 或 MA 过程），其余维度接近白噪声。")
+                f"（AR 或 MA 过程）。")
+        if white_noise:
+            parts.append(
+                f"{', '.join(white_noise)} 维度接近白噪声，无显著线性结构。")
 
     # HMM
     if hmm and hmm.state_profiles:

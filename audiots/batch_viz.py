@@ -518,7 +518,7 @@ def plot_dynamics_dashboard(
         regime_text.append(f"{_short(name, 18)}: {', '.join(conv)}")
 
     ax_regime.text(0.05, 0.95, "\n".join(regime_text), transform=ax_regime.transAxes,
-                   fontsize=8, va="top", fontfamily="monospace")
+                   fontsize=8, va="top")
 
     fig.suptitle("Dynamics & Volatility — Cross-Song Comparison", fontsize=16, fontweight="bold", y=1.01)
     if output_dir:
@@ -655,7 +655,7 @@ def plot_model_ensemble_dashboard(
         summary_lines.append("")
 
     ax5.text(0.05, 0.95, "\n".join(summary_lines), transform=ax5.transAxes,
-             fontsize=8, va="top", fontfamily="monospace")
+             fontsize=8, va="top")
 
     fig.suptitle("Model Ensemble — Cross-Song Structural Analysis", fontsize=16, fontweight="bold", y=1.01)
     if output_dir:
@@ -841,7 +841,7 @@ def plot_global_ml_dashboard(
     stats_text.append("  HMM states represent shared musical textures across the genre.")
 
     ax6.text(0.05, 0.95, "\n".join(stats_text), transform=ax6.transAxes,
-             fontsize=9, va="top", fontfamily="monospace")
+             fontsize=9, va="top")
 
     fig.suptitle("Global ML — Multi-Song Model Evaluation", fontsize=16, fontweight="bold", y=1.01)
     if output_dir:
@@ -907,7 +907,7 @@ def plot_statistical_summary(
         highlight_text.append(f"  {', '.join(bot)} vary most between individual songs.")
 
     ax2.text(0.05, 0.95, "\n".join(highlight_text), transform=ax2.transAxes,
-             fontsize=9, va="top", fontfamily="monospace")
+             fontsize=9, va="top")
 
     # Top row, col 2: Distribution summary
     ax3 = fig.add_subplot(gs[0, 2])
@@ -935,7 +935,7 @@ def plot_statistical_summary(
         dist_text.append("No significant outliers — stylistically cohesive group.")
 
     ax3.text(0.05, 0.95, "\n".join(dist_text), transform=ax3.transAxes,
-             fontsize=9, va="top", fontfamily="monospace")
+             fontsize=9, va="top")
 
     # Bottom row: Distribution plots per main feature group
     names = sorted(per_file.keys())
@@ -1140,6 +1140,760 @@ def plot_batch_report_card(
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# 7. Genre Structure Decoder — trend analysis + GARCH + structural segments
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def plot_genre_structure_decoder(
+    per_file: dict,
+    output_dir: Optional[str] = None,
+) -> Optional[str]:
+    """
+    Decode what makes this genre structurally distinctive using:
+    - ARIMA trend types per song (4 trends × N songs matrix)
+    - GARCH persistence matrix
+    - Structural segment composition (climax/calm/buildup/transition)
+    - Trend directions
+    """
+    if len(per_file) < 2:
+        return None
+
+    names = sorted(per_file.keys())
+    n_songs = len(names)
+    trend_keys = ["energy", "brightness", "complexity", "rhythm"]
+    trend_cn = ["Energy", "Brightness", "Complexity", "Rhythm"]
+
+    fig = plt.figure(figsize=(24, 16))
+    gs = fig.add_gridspec(3, 4, hspace=0.45, wspace=0.35)
+
+    # Row 1: ARIMA trend type matrix (text grid)
+    ax_title = fig.add_subplot(gs[0, :])
+    ax_title.axis("off")
+    ax_title.text(0.5, 0.5, "Genre Structure Decoder — Multi-Dimensional Trend & GARCH Analysis",
+                  transform=ax_title.transAxes, ha="center", fontsize=15, fontweight="bold")
+
+    # Extract ARIMA types
+    arima_matrix = {t: [] for t in trend_keys}
+    garch_matrix = {t: [] for t in trend_keys}
+    segment_data = {"climax": [], "calm": [], "buildup": [], "transition": []}
+    trend_dirs = {t: [] for t in trend_keys}
+    stationary_data = {t: [] for t in trend_keys}
+
+    for name in names:
+        r = per_file.get(name, {})
+        extra = r.get("_batch_extra", {})
+
+        # ARIMA types
+        arima_types = extra.get("arima_trend_types", {})
+        for t in trend_keys:
+            arima_matrix[t].append(arima_types.get(t, "?"))
+
+        # Stationarity
+        arima_stat = extra.get("arima_stationary", {})
+        for t in trend_keys:
+            stationary_data[t].append(arima_stat.get(t, False))
+
+        # GARCH persistence
+        vol = r.get("volatility", {}) if isinstance(r.get("volatility"), dict) else {}
+        vs = vol.get("summary", vol)
+        if isinstance(vs, dict):
+            for t in trend_keys:
+                vd = vs.get(t, {})
+                garch_matrix[t].append(_safe(vd.get("garch_persistence", np.nan)) if isinstance(vd, dict) else np.nan)
+        else:
+            for t in trend_keys:
+                garch_matrix[t].append(np.nan)
+
+        # Structural segments
+        seg = extra.get("structural_segments", {})
+        if seg:
+            total = sum(seg.values()) + 1
+            for k in segment_data:
+                segment_data[k].append(seg.get(f"n_{k}", 0) / total * 100)
+        else:
+            for k in segment_data:
+                segment_data[k].append(0)
+
+        # Trend directions
+        dyn = r.get("dynamics", {}) if isinstance(r.get("dynamics"), dict) else {}
+        ds = dyn.get("summary", dyn)
+        if isinstance(ds, dict):
+            for t in trend_keys:
+                td = ds.get(t, {})
+                trend_dirs[t].append(td.get("trend_direction", "?") if isinstance(td, dict) else "?")
+        else:
+            for t in trend_keys:
+                trend_dirs[t].append("?")
+
+    # Col 0: ARIMA type grid
+    ax1 = fig.add_subplot(gs[1, 0])
+    # Map types to numbers for display
+    type_map = {"mean-reverting": 0, "moving-average": 1, "oscillating": 2,
+                "random-walk": 3, "trending": 4, "white-noise": 5,
+                "unclear": 6, "too_short": 7, "no_model": 8, "?": 6}
+    type_names = ["mean-reverting", "moving-avg", "oscillating", "random-walk",
+                  "trending", "white-noise", "unclear"]
+    type_colors = ["#4C72B0", "#55A868", "#F9A65A", "#C44E52", "#8B0000", "#937860", "#AAAAAA"]
+
+    arima_num = np.zeros((n_songs, len(trend_keys)))
+    for j, t in enumerate(trend_keys):
+        for i, at in enumerate(arima_matrix[t]):
+            arima_num[i, j] = type_map.get(at, 6)
+
+    im1 = ax1.imshow(arima_num, aspect="auto", cmap="tab10", vmin=0, vmax=9)
+    ax1.set_xticks(range(len(trend_keys))); ax1.set_xticklabels(trend_cn, fontsize=9)
+    ax1.set_yticks(range(n_songs)); ax1.set_yticklabels([_short(n, 14) for n in names], fontsize=7)
+    for i in range(n_songs):
+        for j in range(len(trend_keys)):
+            ax1.text(j, i, arima_matrix[trend_keys[j]][i][:10], ha="center", va="center", fontsize=6)
+    ax1.set_title("ARIMA Trend Types", fontweight="bold")
+
+    # Col 1: GARCH persistence heatmap
+    ax2 = fig.add_subplot(gs[1, 1])
+    gp_arr = np.zeros((n_songs, len(trend_keys)))
+    for j, t in enumerate(trend_keys):
+        for i, v in enumerate(garch_matrix[t]):
+            gp_arr[i, j] = v if not np.isnan(v) else 0
+    im2 = ax2.imshow(gp_arr, aspect="auto", cmap="RdYlGn", vmin=0, vmax=1)
+    ax2.set_xticks(range(len(trend_keys))); ax2.set_xticklabels(trend_cn, fontsize=9)
+    ax2.set_yticks(range(n_songs)); ax2.set_yticklabels([_short(n, 14) for n in names], fontsize=7)
+    for i in range(n_songs):
+        for j in range(len(trend_keys)):
+            v = garch_matrix[trend_keys[j]][i]
+            txt = f"{v:.2f}" if not np.isnan(v) else "N/A"
+            ax2.text(j, i, txt, ha="center", va="center", fontsize=6,
+                     color="white" if (not np.isnan(v) and v > 0.6) else "black")
+    ax2.set_title("GARCH Persistence (α+β)", fontweight="bold")
+    plt.colorbar(im2, ax=ax2, shrink=0.85)
+
+    # Col 2: Structural segment composition
+    ax3 = fig.add_subplot(gs[1, 2])
+    x = np.arange(n_songs)
+    bottom = np.zeros(n_songs)
+    seg_colors = {"climax": "#C44E52", "buildup": "#F9A65A", "transition": "#937860", "calm": "#4C72B0"}
+    for k in ["climax", "buildup", "transition", "calm"]:
+        vals = segment_data[k]
+        ax3.bar(x, vals, bottom=bottom, label=k.capitalize(),
+                color=seg_colors[k], alpha=0.8, edgecolor="gray")
+        bottom += vals
+    ax3.set_xticks(x); ax3.set_xticklabels([_short(n, 12) for n in names], rotation=45, ha="right", fontsize=7)
+    ax3.set_ylabel("% of windows")
+    ax3.set_title("Structural Segment Composition", fontweight="bold")
+    ax3.legend(fontsize=7)
+
+    # Col 3: Trend directions summary text
+    ax4 = fig.add_subplot(gs[1, 3])
+    ax4.axis("off")
+    dir_text = ["Trend Direction Summary", "=" * 25, ""]
+    for name in names:
+        dirs = []
+        for t in trend_keys:
+            d = trend_dirs[t][names.index(name)] if names.index(name) < len(trend_dirs[t]) else "?"
+            dirs.append(f"{t[0]}:{d}")
+        dir_text.append(f"{_short(name, 16)}: {', '.join(dirs)}")
+
+    # Add stationarity summary
+    dir_text.append("")
+    dir_text.append("Stationarity (ADF test):")
+    for name in names:
+        stats = []
+        for t in trend_keys:
+            idx = names.index(name)
+            s = stationary_data[t][idx] if idx < len(stationary_data[t]) else False
+            stats.append(f"{t[0]}:{'Y' if s else 'N'}")
+        dir_text.append(f"{_short(name, 16)}: {', '.join(stats)}")
+
+    ax4.text(0.05, 0.95, "\n".join(dir_text), transform=ax4.transAxes,
+             fontsize=8, va="top")
+
+    # Row 2: Genre-level summary
+    # Count dominant ARIMA type per trend
+    ax5 = fig.add_subplot(gs[2, :2])
+    dom_types = {}
+    for t in trend_keys:
+        types_t = arima_matrix[t]
+        counts = {}
+        for tt in types_t:
+            counts[tt] = counts.get(tt, 0) + 1
+        dom = max(counts, key=counts.get) if counts else "?"
+        dom_types[t] = (dom, counts[dom] / n_songs if counts else 0)
+
+    # Bar chart of dominant types
+    for ti, t in enumerate(trend_keys):
+        counts = {}
+        for tt in arima_matrix[t]:
+            counts[tt] = counts.get(tt, 0) + 1
+        x_pos = np.arange(len(type_names)) + ti * 0.2
+        vals = [counts.get(tn, 0) for tn in type_names]
+        ax5.bar(x_pos, vals, width=0.18, label=trend_cn[ti],
+                color=COLORS[ti % len(COLORS)], alpha=0.8)
+    ax5.set_xticks(np.arange(len(type_names)) + 0.3)
+    ax5.set_xticklabels(type_names, rotation=45, ha="right", fontsize=7)
+    ax5.set_ylabel("Count")
+    ax5.set_title("ARIMA Trend Type Distribution by Dimension", fontweight="bold")
+    ax5.legend(fontsize=8)
+
+    # GARCH summary
+    ax6 = fig.add_subplot(gs[2, 2:])
+    gp_valid = {}
+    for t in trend_keys:
+        vals = [v for v in garch_matrix[t] if not np.isnan(v)]
+        if vals:
+            gp_valid[t] = vals
+    if gp_valid:
+        bp_data = list(gp_valid.values())
+        bp_labels = list(gp_valid.keys())
+        bp = ax6.boxplot(bp_data, labels=bp_labels, patch_artist=True, widths=0.4)
+        for patch, color in zip(bp["boxes"], COLORS[:len(bp_labels)]):
+            patch.set_facecolor(color); patch.set_alpha(0.6)
+        # Overlay individual points
+        for i, vals in enumerate(bp_data):
+            ax6.scatter([i + 1] * len(vals), vals, color="black", s=20, zorder=5, alpha=0.7)
+    ax6.axhline(y=1.0, color="red", linestyle="--", alpha=0.5, label="Unit root (α+β=1)")
+    ax6.set_ylabel("GARCH Persistence (α+β)")
+    ax6.set_title("GARCH(1,1) Persistence Distribution (higher = longer vol memory)", fontweight="bold")
+    ax6.legend(fontsize=8); ax6.grid(True, alpha=0.2, axis="y")
+    _annotate_consistency(ax6, [np.mean(v) for v in gp_valid.values()], x=0.98, y=0.98)
+
+    if output_dir:
+        return _save(fig, output_dir, "B07_genre_structure_decoder.png")
+    return None
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 8. Audio Signal Deep Dive — white noise, periodicity, complexity, unsupervised
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def plot_audio_signal_deep_dive(
+    per_file: dict,
+    output_dir: Optional[str] = None,
+) -> Optional[str]:
+    """
+    Deep dive into audio signal properties:
+    - White noise test results (6 tests per song)
+    - Periodicity comparison
+    - Complexity scatter
+    - Unsupervised measures (RQA, change points, motifs, clusters)
+    """
+    if len(per_file) < 2:
+        return None
+
+    names = sorted(per_file.keys())
+    n_songs = len(names)
+
+    fig = plt.figure(figsize=(24, 16))
+    gs = fig.add_gridspec(3, 4, hspace=0.45, wspace=0.35)
+
+    # Title
+    ax_t = fig.add_subplot(gs[0, :])
+    ax_t.axis("off")
+    ax_t.text(0.5, 0.5, "Audio Signal Deep Dive — White Noise, Periodicity & Unsupervised Patterns",
+              transform=ax_t.transAxes, ha="center", fontsize=15, fontweight="bold")
+
+    # Col 0: White noise test summary matrix
+    ax1 = fig.add_subplot(gs[1, :2])
+    test_names = ["ljung_box", "box_pierce", "jarque_bera", "acf_test",
+                  "variance_stationarity", "runs_test"]
+    test_labels = ["Ljung-Box", "Box-Pierce", "Jarque-Bera", "ACF Test",
+                   "Var Stationarity", "Runs Test"]
+    wn_matrix = np.zeros((n_songs, len(test_names)))
+    for i, name in enumerate(names):
+        r = per_file.get(name, {})
+        ts = r.get("timeseries", {}) if isinstance(r.get("timeseries"), dict) else {}
+        wn = ts.get("white_noise_test", {})
+        if isinstance(wn, dict):
+            for j, tn in enumerate(test_names):
+                t = wn.get(tn, {})
+                passed = False
+                if isinstance(t, dict):
+                    if tn == "jarque_bera":
+                        passed = t.get("is_normal") == "True"
+                    elif tn == "variance_stationarity":
+                        passed = t.get("is_stationary") == True or t.get("is_stationary") == "True"
+                    elif tn in ("acf_test",):
+                        passed = t.get("is_white_noise") == True or t.get("is_white_noise") == "True"
+                    else:
+                        passed = t.get("is_white_noise") == "True" or t.get("is_white_noise") == True
+                wn_matrix[i, j] = 1 if passed else 0
+
+    im1 = ax1.imshow(wn_matrix, aspect="auto", cmap="RdYlGn", vmin=0, vmax=1)
+    ax1.set_xticks(range(len(test_labels))); ax1.set_xticklabels(test_labels, fontsize=9)
+    ax1.set_yticks(range(n_songs)); ax1.set_yticklabels([_short(n, 14) for n in names], fontsize=8)
+    for i in range(n_songs):
+        for j in range(len(test_labels)):
+            ax1.text(j, i, "PASS" if wn_matrix[i, j] > 0.5 else "FAIL",
+                     ha="center", va="center", fontsize=7, fontweight="bold",
+                     color="white" if wn_matrix[i, j] > 0.5 else "black")
+    ax1.set_title("White Noise Test Results (6 tests) — Green=PASS, Red=FAIL", fontweight="bold")
+    plt.colorbar(im1, ax=ax1, shrink=0.85, ticks=[0, 1])
+    ax1.set_xlabel("Higher pass rate = more unpredictable / noisy signal")
+
+    # Col 2: Overall white noise summary
+    ax2 = fig.add_subplot(gs[1, 2])
+    overall = []
+    for name in names:
+        r = per_file.get(name, {})
+        ts = r.get("timeseries", {}) if isinstance(r.get("timeseries"), dict) else {}
+        wn = ts.get("white_noise_test", {})
+        ov = wn.get("overall", {}) if isinstance(wn, dict) else {}
+        tests_passed = ov.get("tests_passed", 0)
+        total_tests = ov.get("total_tests", 5)
+        overall.append(tests_passed / max(total_tests, 1) * 100)
+    ax2.barh(range(n_songs), overall,
+             color=[COLORS[i % len(COLORS)] for i in range(n_songs)],
+             edgecolor="gray", alpha=0.8)
+    ax2.set_yticks(range(n_songs)); ax2.set_yticklabels([_short(n, 14) for n in names], fontsize=8)
+    ax2.set_xlabel("% Tests Passed (higher = closer to white noise)")
+    ax2.set_title("White Noise Score\n(higher = more random signal)", fontweight="bold", fontsize=10)
+    ax2.grid(True, alpha=0.2, axis="x")
+    _annotate_consistency(ax2, overall, x=0.98, y=0.2)
+
+    # Col 3: Complexity scatter
+    ax3 = fig.add_subplot(gs[1, 3])
+    zcr_vals, se_vals, sf_vals = [], [], []
+    for name in names:
+        r = per_file.get(name, {})
+        ts = r.get("timeseries", {}) if isinstance(r.get("timeseries"), dict) else {}
+        cpx = ts.get("complexity", {}) if isinstance(ts, dict) else {}
+        zcr_vals.append(_safe(cpx.get("zero_crossing_rate", 0) if isinstance(cpx, dict) else 0))
+        se_vals.append(_safe(cpx.get("sample_entropy", 0) if isinstance(cpx, dict) else 0))
+        sf_vals.append(_safe(ts.get("spectral_flatness", 0)))
+    for i, name in enumerate(names):
+        ax3.scatter(zcr_vals[i], se_vals[i], s=100, color=COLORS[i % len(COLORS)],
+                    edgecolor="black", alpha=0.8, label=_short(name, 14))
+    ax3.set_xlabel("Zero-Crossing Rate"); ax3.set_ylabel("Sample Entropy")
+    ax3.set_title("Complexity Space — ZCR vs Entropy\n(higher = more complex)", fontweight="bold", fontsize=10)
+    ax3.legend(fontsize=6, loc="upper left"); ax3.grid(True, alpha=0.2)
+
+    # Row 2, Col 0-1: Periodicity comparison
+    ax4 = fig.add_subplot(gs[2, :2])
+    domf_vals, domp_vals = [], []
+    for name in names:
+        r = per_file.get(name, {})
+        ts = r.get("timeseries", {}) if isinstance(r.get("timeseries"), dict) else {}
+        per = ts.get("periodicity", {}) if isinstance(ts, dict) else {}
+        domf_vals.append(_safe(per.get("dominant_frequency", 0) if isinstance(per, dict) else 0))
+        domp_vals.append(_safe(per.get("dominant_period", 0) if isinstance(per, dict) else 0))
+    x = np.arange(n_songs)
+    width = 0.35
+    ax4.bar(x - width / 2, domf_vals, width, label="Dominant Frequency (Hz)", color="#4C72B0", alpha=0.85)
+    ax4_twin = ax4.twinx()
+    ax4_twin.bar(x + width / 2, domp_vals, width, label="Dominant Period (samples)", color="#C44E52", alpha=0.85)
+    ax4.set_xticks(x); ax4.set_xticklabels([_short(n, 14) for n in names], rotation=45, ha="right", fontsize=8)
+    ax4.set_ylabel("Frequency (Hz)", color="#4C72B0")
+    ax4_twin.set_ylabel("Period (samples)", color="#C44E52")
+    ax4.set_title("Periodicity Analysis — Dominant Frequency & Period", fontweight="bold")
+    lines1, labels1 = ax4.get_legend_handles_labels()
+    lines2, labels2 = ax4_twin.get_legend_handles_labels()
+    ax4.legend(lines1 + lines2, labels1 + labels2, fontsize=8, loc="upper right")
+    ax4.grid(True, alpha=0.2, axis="y")
+
+    # Row 2, Col 2-3: Unsupervised measures
+    ax5 = fig.add_subplot(gs[2, 2:])
+    unsup_metrics = ["n_change_points", "n_segments", "n_motifs", "n_clusters",
+                     "silhouette_score", "recurrence_rate", "determinism", "laminarity"]
+    unsup_labels = ["Change\nPoints", "Segments", "Motifs", "N Clusters",
+                    "Silhouette\nScore", "Recurrence\nRate", "Determinism", "Laminarity"]
+    unsup_data = {m: [] for m in unsup_metrics}
+    for name in names:
+        r = per_file.get(name, {})
+        extra = r.get("_batch_extra", {})
+        unsup = extra.get("unsupervised", {})
+        for m in unsup_metrics:
+            v = unsup.get(m, np.nan) if isinstance(unsup, dict) else np.nan
+            unsup_data[m].append(v if not np.isnan(v) else 0)
+
+    x_u = np.arange(len(unsup_labels))
+    width_u = 0.8 / n_songs
+    for si, name in enumerate(names):
+        vals = [unsup_data[m][si] if si < len(unsup_data[m]) else 0 for m in unsup_metrics]
+        # Normalize to [0,1] for comparison
+        max_vals = [max(unsup_data[m]) + 1e-12 for m in unsup_metrics]
+        normed = [v / mv if mv > 0 else 0 for v, mv in zip(vals, max_vals)]
+        ax5.bar(x_u + si * width_u, normed, width_u,
+                color=COLORS[si % len(COLORS)], alpha=0.8, label=_short(name, 12))
+    ax5.set_xticks(x_u + width_u * (n_songs - 1) / 2)
+    ax5.set_xticklabels(unsup_labels, fontsize=7)
+    ax5.set_ylabel("Normalized Value")
+    ax5.set_title("Unsupervised Pattern Discovery — Cross-Song Comparison", fontweight="bold")
+    ax5.legend(fontsize=6, ncol=2)
+    ax5.grid(True, alpha=0.2, axis="y")
+
+    if output_dir:
+        return _save(fig, output_dir, "B08_audio_signal_deep_dive.png")
+    return None
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 9. Unsupervised Commonality Discovery — PCA + Clustering + NMF
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def plot_unsupervised_discovery(
+    per_file: dict,
+    song_mel_data: Dict[str, np.ndarray],
+    feature_matrix: np.ndarray,
+    feature_names: List[str],
+    song_names: List[str],
+    output_dir: Optional[str] = None,
+) -> Optional[str]:
+    """
+    Unsupervised discovery of latent commonalities:
+    - PCA 2D projection of songs in feature space
+    - Hierarchical clustering dendrogram
+    - NMF shared spectral components
+    - Silhouette analysis
+    """
+    from scipy.cluster.hierarchy import dendrogram, linkage, fcluster
+    from scipy.spatial.distance import pdist
+    from sklearn.decomposition import PCA
+
+    if len(song_names) < 3:
+        return None
+
+    fig = plt.figure(figsize=(24, 14))
+    gs = fig.add_gridspec(2, 4, hspace=0.35, wspace=0.35)
+
+    # Title
+    ax_t = fig.add_subplot(gs[0, :])
+    ax_t.axis("off")
+    ax_t.text(0.5, 0.5, "Unsupervised Commonality Discovery — Latent Structure Across Songs",
+              transform=ax_t.transAxes, ha="center", fontsize=15, fontweight="bold")
+
+    # Prepare data: remove NaN-heavy features and rows
+    mat, fn, sn = feature_matrix, list(feature_names), list(song_names)
+    # Keep features with < 50% NaN
+    valid_cols = [j for j in range(mat.shape[1])
+                  if np.sum(np.isnan(mat[:, j])) < mat.shape[0] * 0.5]
+    mat_clean = mat[:, valid_cols]
+    fn_clean = [fn[j] for j in valid_cols]
+
+    # Fill remaining NaN with column median
+    for j in range(mat_clean.shape[1]):
+        col = mat_clean[:, j]
+        mask = np.isnan(col)
+        if mask.any():
+            mat_clean[mask, j] = np.nanmedian(col)
+
+    # Standardize
+    mat_std = np.zeros_like(mat_clean)
+    for j in range(mat_clean.shape[1]):
+        col = mat_clean[:, j]
+        std_j = np.std(col)
+        if std_j > 1e-12:
+            mat_std[:, j] = (col - np.mean(col)) / std_j
+        else:
+            mat_std[:, j] = 0.0
+
+    # Col 0-1: PCA 2D projection
+    ax1 = fig.add_subplot(gs[1, :2])
+    pca = PCA(n_components=min(5, mat_std.shape[0], mat_std.shape[1]))
+    pca_result = pca.fit_transform(mat_std)
+
+    if pca_result.shape[1] >= 2:
+        # Plot songs in PCA space
+        for i, name in enumerate(sn):
+            ax1.scatter(pca_result[i, 0], pca_result[i, 1],
+                        s=250, color=COLORS[i % len(COLORS)],
+                        edgecolor="black", linewidth=1.5, alpha=0.85,
+                        label=_short(name, 16))
+            ax1.annotate(_short(name, 14), (pca_result[i, 0], pca_result[i, 1]),
+                         textcoords="offset points", xytext=(0, 12),
+                         fontsize=8, ha="center")
+
+        # Confidence ellipse (2σ for bivariate normal)
+        from matplotlib.patches import Ellipse
+        cov = np.cov(pca_result[:, :2].T)
+        eigenvalues, eigenvectors = np.linalg.eigh(cov)
+        angle = np.degrees(np.arctan2(eigenvectors[1, 0], eigenvectors[0, 0]))
+        width, height = 2 * np.sqrt(eigenvalues) * 2.0  # 2σ
+        ellipse = Ellipse(xy=np.mean(pca_result[:, :2], axis=0),
+                          width=width, height=height, angle=angle,
+                          facecolor="none", edgecolor="gray", linestyle="--",
+                          linewidth=2, alpha=0.6, label="95% confidence ellipse")
+        ax1.add_patch(ellipse)
+
+        # Explained variance
+        ev = pca.explained_variance_ratio_
+        ax1.set_xlabel(f"PC1 ({ev[0]:.0%} variance)")
+        ax1.set_ylabel(f"PC2 ({ev[1]:.0%} variance)" if len(ev) > 1 else "PC2")
+    ax1.set_title("PCA Projection — Songs in Feature Space\n(closer = more similar)", fontweight="bold")
+    ax1.legend(fontsize=7, loc="best", ncol=2)
+    ax1.grid(True, alpha=0.2)
+    ax1.axhline(y=0, color="gray", alpha=0.3); ax1.axvline(x=0, color="gray", alpha=0.3)
+
+    # Col 2: Hierarchical clustering dendrogram
+    ax2 = fig.add_subplot(gs[1, 2])
+    if mat_std.shape[0] >= 3:
+        dists = pdist(mat_std, metric="euclidean")
+        Z = linkage(dists, method="ward")
+        dendrogram(Z, labels=[_short(n, 14) for n in sn],
+                   ax=ax2, leaf_font_size=8, color_threshold=0.7 * max(Z[:, 2]))
+        ax2.set_title("Hierarchical Clustering\n(Ward linkage, Euclidean)", fontweight="bold")
+        ax2.set_ylabel("Distance")
+        # Rotate labels
+        for label in ax2.get_xmajorticklabels():
+            label.set_rotation(45)
+            label.set_ha("right")
+
+    # Col 3: Automatic discovery summary
+    ax3 = fig.add_subplot(gs[1, 3])
+    ax3.axis("off")
+
+    # Compute silhouette-like score for the group
+    if mat_std.shape[0] >= 3:
+        within_dists = []
+        for i in range(mat_std.shape[0]):
+            for j in range(i + 1, mat_std.shape[0]):
+                within_dists.append(np.sqrt(np.sum((mat_std[i] - mat_std[j]) ** 2)))
+        mean_within = np.mean(within_dists) if within_dists else 0
+        # Within/between ratio as cohesion metric
+        total_var = np.sum(np.var(mat_std, axis=0))
+        cohesion = 1.0 / (1.0 + mean_within) if mean_within > 0 else 1.0
+    else:
+        cohesion = 0.0
+        mean_within = 0.0
+
+    # Find top 3 most similar song pairs
+    similar_pairs = []
+    if mat_std.shape[0] >= 2:
+        for i in range(mat_std.shape[0]):
+            for j in range(i + 1, mat_std.shape[0]):
+                d = np.sqrt(np.sum((mat_std[i] - mat_std[j]) ** 2))
+                similar_pairs.append((d, i, j))
+        similar_pairs.sort()
+
+    # Find NMF shared components from Mel data
+    nmf_text = []
+    if song_mel_data and len(song_mel_data) >= 2:
+        try:
+            from sklearn.decomposition import NMF
+            # Pool all Mel spectra (time-averaged per song)
+            all_means = []
+            for name in sn:
+                if name in song_mel_data:
+                    all_means.append(song_mel_data[name].mean(axis=1))
+            if len(all_means) >= 3:
+                stacked = np.array(all_means)
+                nmf = NMF(n_components=min(3, len(all_means)), random_state=42)
+                W = nmf.fit_transform(stacked)  # (n_songs, n_components)
+                H = nmf.components_  # (n_components, n_mels)
+                nmf_text.append(f"NMF found {H.shape[0]} shared spectral components:")
+                for c in range(H.shape[0]):
+                    # Which songs use this component most?
+                    top_song = sn[np.argmax(W[:, c])]
+                    nmf_text.append(f"  Component {c+1}: dominant in {_short(top_song, 14)} "
+                                    f"(weight={W[:, c].max():.2f})")
+        except Exception:
+            pass
+
+    report = [
+        "Unsupervised Discovery Report",
+        "=" * 30, "",
+        f"Group cohesion: {cohesion:.3f} (1.0 = perfectly cohesive)",
+        f"Mean pairwise distance: {mean_within:.3f}",
+        f"PCA explains {pca_result.shape[1]} dims",
+        f"  PC1: {pca.explained_variance_ratio_[0]:.1%}",
+        f"  PC2: {pca.explained_variance_ratio_[1]:.1%}" if pca_result.shape[1] > 1 else "",
+        f"  Total: {sum(pca.explained_variance_ratio_):.1%}",
+        "",
+        "Most similar song pairs:",
+    ]
+    for d, i, j in similar_pairs[:3]:
+        report.append(f"  {_short(sn[i], 12)} ↔ {_short(sn[j], 12)} (d={d:.3f})")
+    if nmf_text:
+        report.append("")
+        report.extend(nmf_text)
+
+    ax3.text(0.05, 0.95, "\n".join(report), transform=ax3.transAxes,
+             fontsize=8.5, va="top")
+
+    if output_dir:
+        return _save(fig, output_dir, "B09_unsupervised_discovery.png")
+    return None
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 10. Statistical Confidence Report — bootstrap CIs + effect sizes
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def plot_statistical_confidence(
+    per_file: dict,
+    feature_matrix: np.ndarray,
+    feature_names: List[str],
+    song_names: List[str],
+    output_dir: Optional[str] = None,
+) -> Optional[str]:
+    """
+    Statistical confidence for each commonality finding:
+    - Bootstrap 95% CI waterfall chart
+    - Effect size (Cohen's d) ranking
+    - Permutation test p-value
+    - Consensus score per feature group
+    """
+    from audiots.batch_stats import (
+        feature_consensus_report, permutation_cluster_test, bootstrap_ci,
+    )
+
+    if len(song_names) < 3:
+        return None
+
+    consensus = feature_consensus_report(feature_matrix, feature_names)
+    perm_test = permutation_cluster_test(feature_matrix)
+
+    fig = plt.figure(figsize=(24, 16))
+    gs = fig.add_gridspec(2, 4, hspace=0.4, wspace=0.35)
+
+    # Title
+    ax_t = fig.add_subplot(gs[0, :])
+    ax_t.axis("off")
+    ax_t.text(0.5, 0.5, "Statistical Confidence Report — How Confident Are These Commonalities?",
+              transform=ax_t.transAxes, ha="center", fontsize=15, fontweight="bold")
+
+    per_feat = consensus["per_feature"]
+
+    # Col 0: Top features with bootstrap CI (waterfall)
+    ax1 = fig.add_subplot(gs[1, 0])
+    top_n = min(12, len(per_feat))
+    top_features = per_feat[:top_n]
+    labels = [f["feature"].replace("_", " ")[:25] for f in top_features]
+    means = [f["ci_mean"] for f in top_features]
+    lowers = [f["ci_lower"] for f in top_features]
+    uppers = [f["ci_upper"] for f in top_features]
+
+    y_pos = range(len(labels))
+    # Normalize for display
+    max_range = max(abs(np.nanmax(uppers)), abs(np.nanmin(lowers)), 1e-12)
+    means_n = [m / max_range for m in means]
+    lowers_n = [(m - l) / max_range for m, l in zip(means, lowers)]
+    uppers_n = [(u - m) / max_range for m, u in zip(means, uppers)]
+
+    colors = [plt.cm.RdYlGn(1.0 - f["consensus_score"]) for f in top_features]
+    ax1.barh(y_pos, means_n, color=colors, edgecolor="gray", alpha=0.85,
+             xerr=[lowers_n, uppers_n], capsize=3)
+    ax1.set_yticks(y_pos)
+    ax1.set_yticklabels(labels, fontsize=7)
+    ax1.set_xlabel("Normalized mean with 95% CI")
+    ax1.set_title("Feature Consensus Ranking\n(bar = mean, whisker = 95% bootstrap CI)", fontweight="bold", fontsize=10)
+    ax1.axvline(x=0, color="gray", linewidth=0.5)
+    ax1.grid(True, alpha=0.2, axis="x")
+
+    # Col 1: Effect size ranking
+    ax2 = fig.add_subplot(gs[1, 1])
+    d_vals = [abs(f["cohens_d"]) if np.isfinite(abs(f["cohens_d"])) else 0 for f in per_feat[:top_n]]
+    d_colors = []
+    for d in d_vals:
+        if d >= 0.8: d_colors.append("#2CA02C")  # large
+        elif d >= 0.5: d_colors.append("#FF7F0E")  # medium
+        elif d >= 0.2: d_colors.append("#D62728")  # small
+        else: d_colors.append("#AAAAAA")  # negligible
+    ax2.barh(y_pos, d_vals, color=d_colors, edgecolor="gray", alpha=0.85)
+    ax2.set_yticks(y_pos)
+    ax2.set_yticklabels(labels, fontsize=7)
+    ax2.axvline(x=0.2, color="orange", linestyle="--", alpha=0.5, label="small (0.2)")
+    ax2.axvline(x=0.5, color="red", linestyle="--", alpha=0.5, label="medium (0.5)")
+    ax2.axvline(x=0.8, color="green", linestyle="--", alpha=0.5, label="large (0.8)")
+    ax2.set_xlabel("|Cohen's d|")
+    ax2.set_title("Effect Size Ranking\n(higher = stronger genre signal)", fontweight="bold", fontsize=10)
+    ax2.legend(fontsize=7)
+
+    # Col 2: Consensus score by category
+    ax3 = fig.add_subplot(gs[1, 2])
+    # Group features by category
+    groups = {"dynamics": [], "volatility": [], "spectral": [], "model": [], "complexity": [], "other": []}
+    for f in per_feat:
+        fn = f["feature"]
+        if any(t in fn for t in ["energy", "brightness", "complex", "rhythm"]):
+            if "vol" in fn or "garch" in fn:
+                groups["volatility"].append(f["consensus_score"])
+            elif "mean" in fn or "std" in fn or "peaks" in fn:
+                groups["dynamics"].append(f["consensus_score"])
+            else:
+                groups["model"].append(f["consensus_score"])
+        elif any(t in fn for t in ["zcr", "entropy", "flatness", "spectral"]):
+            groups["spectral"].append(f["consensus_score"])
+        elif any(t in fn for t in ["pred_", "rmse", "mae", "hmm_", "lstm_"]):
+            groups["model"].append(f["consensus_score"])
+        elif any(t in fn for t in ["duration", "change_point", "segment", "motif"]):
+            groups["complexity"].append(f["consensus_score"])
+        else:
+            groups["other"].append(f["consensus_score"])
+
+    group_labels = []
+    group_means = []
+    group_cis = []
+    for g, vals in groups.items():
+        if vals:
+            group_labels.append(g)
+            group_means.append(np.mean(vals))
+            # Bootstrap CI for group mean
+            if len(vals) >= 3:
+                bs = bootstrap_ci(np.array(vals), n_bootstrap=500)
+                group_cis.append((bs["mean"] - bs["lower"], bs["upper"] - bs["mean"]))
+            else:
+                group_cis.append((0, 0))
+
+    group_cis_lower = [c[0] for c in group_cis]
+    group_cis_upper = [c[1] for c in group_cis]
+    g_colors = [plt.cm.Set2(i / len(group_labels)) for i in range(len(group_labels))]
+    ax3.barh(range(len(group_labels)), group_means, color=g_colors, edgecolor="gray", alpha=0.85,
+             xerr=[group_cis_lower, group_cis_upper], capsize=4)
+    ax3.set_yticks(range(len(group_labels)))
+    ax3.set_yticklabels(group_labels, fontsize=10)
+    ax3.set_xlabel("Mean Consensus Score (0-1)")
+    ax3.set_title("Consensus by Feature Group\n(higher = more genre-consistent)", fontweight="bold", fontsize=10)
+    ax3.set_xlim(0, 1)
+    ax3.grid(True, alpha=0.2, axis="x")
+
+    # Col 3: Summary text
+    ax4 = fig.add_subplot(gs[1, 3])
+    ax4.axis("off")
+
+    # Permutation test interpretation
+    p_val = perm_test.get("p_value", np.nan)
+    sig = perm_test.get("significant", False)
+
+    report = [
+        "Statistical Confidence Summary",
+        "=" * 30, "",
+        f"Features analyzed: {len(per_feat)}",
+        f"Songs: {len(song_names)}",
+        "",
+        "Permutation Test:",
+        f"  p = {p_val:.4f} {'*' if sig else '(n.s.)'}",
+        f"  Observed cohesion: {perm_test.get('observed_dist', np.nan):.3f}",
+        f"  Null expectation: {perm_test.get('null_mean', np.nan):.3f} +/- {perm_test.get('null_std', np.nan):.3f}",
+    ]
+    if sig:
+        report.append("  => The observed similarity is statistically")
+        report.append("     significant — songs are more similar than")
+        report.append("     expected by chance.")
+    else:
+        report.append("  => Cannot reject null — need more songs or")
+        report.append("     features to establish significance.")
+    report.append("")
+    report.append("Consensus Score Distribution:")
+    report.append(f"  High (>0.7): {consensus['n_high_consensus']} features")
+    report.append(f"  Medium (0.4-0.7): {consensus['n_medium_consensus']} features")
+    report.append(f"  Low (<0.4): {consensus['n_low_consensus']} features")
+    report.append("")
+    report.append("Interpretation Guide:")
+    report.append("  |d| > 0.8: strong genre-defining feature")
+    report.append("  p < 0.05: statistically significant clustering")
+    report.append("  Consensus > 0.7: highly reliable commonality")
+    if per_feat and per_feat[0]["consensus_score"] > 0.7:
+        report.append("")
+        report.append(f"Strongest finding: {per_feat[0]['feature'].replace('_', ' ')}")
+        report.append(f"  d={per_feat[0]['cohens_d']:.2f}, CI=[{per_feat[0]['ci_lower']:.3f}, {per_feat[0]['ci_upper']:.3f}]")
+        report.append(f"  Consensus={per_feat[0]['consensus_score']:.3f}")
+
+    ax4.text(0.05, 0.95, "\n".join(report), transform=ax4.transAxes,
+             fontsize=8.5, va="top")
+
+    if output_dir:
+        return _save(fig, output_dir, "B10_statistical_confidence.png")
+    return None
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Master orchestrator
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1223,5 +1977,42 @@ def generate_all_batch_plots(
             if p: saved.append(p)
         except Exception as e:
             print(f"  [WARN] Report card failed: {e}")
+
+    # 7. Genre Structure Decoder (ARIMA types + GARCH + segments)
+    if per_file:
+        try:
+            p = plot_genre_structure_decoder(per_file, output_dir)
+            if p: saved.append(p)
+        except Exception as e:
+            print(f"  [WARN] Genre structure decoder failed: {e}")
+
+    # 8. Audio Signal Deep Dive (white noise + periodicity + unsupervised)
+    if per_file:
+        try:
+            p = plot_audio_signal_deep_dive(per_file, output_dir)
+            if p: saved.append(p)
+        except Exception as e:
+            print(f"  [WARN] Audio signal deep dive failed: {e}")
+
+    # ── Build feature matrix once for B09 and B10 ──────────────────────
+    mat, feat_names, song_names_ordered = _extract_scalar_features(per_file)
+
+    # 9. Unsupervised Commonality Discovery (PCA + clustering + NMF)
+    if per_file and len(song_names_ordered) >= 3:
+        try:
+            p = plot_unsupervised_discovery(
+                per_file, song_mel_data, mat, feat_names, song_names_ordered, output_dir)
+            if p: saved.append(p)
+        except Exception as e:
+            print(f"  [WARN] Unsupervised discovery failed: {e}")
+
+    # 10. Statistical Confidence Report (bootstrap + effect sizes)
+    if per_file and len(song_names_ordered) >= 3 and mat.shape[0] >= 3:
+        try:
+            p = plot_statistical_confidence(
+                per_file, mat, feat_names, song_names_ordered, output_dir)
+            if p: saved.append(p)
+        except Exception as e:
+            print(f"  [WARN] Statistical confidence failed: {e}")
 
     return saved

@@ -5,40 +5,43 @@ from scipy import signal
 from scipy.stats import chi2, norm, jarque_bera
 
 
-def compute_acf(x, nlags=40):
-    """Compute autocorrelation function (ACF)."""
+def _fft_acf(x, nlags):
+    """FFT-based autocorrelation — O(N log N) instead of O(N * nlags)."""
     n = len(x)
     x_centered = x - np.mean(x)
-    var = np.var(x)
+    # Zero-pad to next power of 2 for FFT efficiency
+    nfft = 2 ** int(np.ceil(np.log2(2 * n)))
+    fft_x = np.fft.rfft(x_centered, n=nfft)
+    acf_full = np.fft.irfft(fft_x * np.conj(fft_x), n=nfft)[:n]
+    # Normalize to get correlation coefficients
+    if acf_full[0] > 0:
+        acf_full = acf_full / acf_full[0]
+    return acf_full[:nlags]
+
+
+def compute_acf(x, nlags=40):
+    """Compute autocorrelation function (ACF) using FFT."""
+    n = len(x)
+    acf_vals = _fft_acf(x, nlags + 1)
 
     lags = np.arange(nlags)
-    acf_vals = np.zeros(nlags)
-    for lag in lags:
-        if lag == 0:
-            acf_vals[lag] = 1.0
-        else:
-            acf_vals[lag] = np.corrcoef(x_centered[lag:], x_centered[:-lag])[0, 1] if var > 0 else 0
-
     ci = 1.96 / np.sqrt(n)
-    return lags, acf_vals, ci
+    return lags, acf_vals[1:nlags + 1], ci
 
 
 def compute_pacf(x, nlags=40):
-    """Compute partial autocorrelation function (PACF) using Yule-Walker."""
+    """Compute partial autocorrelation function (PACF) using Yule-Walker with FFT-based ACF."""
     n = len(x)
-    lags = np.arange(nlags)
+
+    # Get raw ACF via FFT (fast!)
+    acf_raw = _fft_acf(x, nlags + 1)
+
     pacf_vals = np.zeros(nlags)
-    acf_raw = np.zeros(nlags + 1)
-
-    x_centered = x - np.mean(x)
-    var = np.var(x)
-    for lag in range(nlags + 1):
-        if lag == 0:
-            acf_raw[0] = 1.0
-        else:
-            acf_raw[lag] = np.corrcoef(x_centered[lag:], x_centered[:-lag])[0, 1] if var > 0 else 0
-
     pacf_vals[0] = 1.0
+
+    if nlags < 2:
+        return np.arange(nlags), pacf_vals, 1.96 / np.sqrt(n)
+
     phi = np.zeros((nlags, nlags))
     phi[0, 0] = acf_raw[1]
     pacf_vals[1] = phi[0, 0]
@@ -61,6 +64,7 @@ def compute_pacf(x, nlags=40):
         pacf_vals[k] = phi[k - 1, k - 1]
 
     ci = 1.96 / np.sqrt(n)
+    lags = np.arange(nlags)
     return lags, pacf_vals, ci
 
 

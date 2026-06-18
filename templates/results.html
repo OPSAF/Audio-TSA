@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ results.experiment_name or results['params']['experiment_name'] or 'Unnamed Experiment' }} — Audio Lab</title>
+    <title>{{ results.get('experiment_name') or results.get('params', {}).get('experiment_name') or 'Unnamed Experiment' }} — Audio Lab</title>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -795,7 +795,7 @@
                 </div>
                 <div class="window-title">
                     <i class="fas fa-chart-line"></i>
-                    {{ results.experiment_name or results['params']['experiment_name'] or 'Unnamed Experiment' }}
+                    {{ results.get('experiment_name') or results.get('params', {}).get('experiment_name') or 'Unnamed Experiment' }}
                 </div>
                 <div class="window-actions">
                     <a class="ghost-btn" href="/docs"><i class="fas fa-book"></i> DOCS</a>
@@ -808,11 +808,13 @@
                 <aside class="sidebar">
                     <div class="sidebar-brand">Experiment</div>
                     <div class="sidebar-experiment">
-                        <div class="sidebar-experiment-name">{{ results.experiment_name or results['params']['experiment_name'] or 'Unnamed' }}</div>
+                        <div class="sidebar-experiment-name">{{ results.get('experiment_name') or results.get('params', {}).get('experiment_name') or 'Unnamed' }}</div>
                         <div class="sidebar-experiment-meta">
                             <div>Task: {{ task_id }}</div>
-                            <div>Audio: {{ results['params']['audio1_name'][:20] }}...</div>
-                            <div>Forecast: {{ results['params']['forecast_horizon'] }}</div>
+                            {% if results.get('params') %}
+                            <div>Audio: {{ results['params'].get('audio1_name', '')[:20] }}...</div>
+                            <div>Forecast: {{ results['params'].get('forecast_horizon', 'N/A') }}</div>
+                            {% endif %}
                         </div>
                     </div>
 
@@ -846,32 +848,42 @@
                 <!-- Main Content -->
                 <main class="content-wrap">
                     <!-- Overview Stats -->
+                    {% if results.get('params') and results.get('audio_info') %}
                     <section id="sec-overview">
                         <div class="stats-grid">
                             <div class="stat-card">
                                 <div class="stat-icon"><i class="fas fa-file-audio"></i></div>
-                                <div class="stat-val">{{ results['params']['audio1_name'][:15] }}...</div>
+                                <div class="stat-val">{{ results['params'].get('audio1_name', '')[:15] }}...</div>
                                 <div class="stat-label">Audio File</div>
                             </div>
                             <div class="stat-card">
                                 <div class="stat-icon"><i class="fas fa-clock"></i></div>
-                                <div class="stat-val">{{ results['audio_info']['duration']|float|round(2) }}s</div>
+                                <div class="stat-val">{{ results['audio_info'].get('duration', 0)|float|round(2) }}s</div>
                                 <div class="stat-label">Duration</div>
                             </div>
                             <div class="stat-card">
                                 <div class="stat-icon"><i class="fas fa-wave-square"></i></div>
-                                <div class="stat-val">{{ results['audio_info']['sample_rate'] }}</div>
+                                <div class="stat-val">{{ results['audio_info'].get('sample_rate', 'N/A') }}</div>
                                 <div class="stat-label">Sample Rate</div>
                             </div>
                             <div class="stat-card">
                                 <div class="stat-icon"><i class="fas fa-forward"></i></div>
-                                <div class="stat-val">{{ results['params']['forecast_horizon'] }}</div>
+                                <div class="stat-val">{{ results['params'].get('forecast_horizon', 'N/A') }}</div>
                                 <div class="stat-label">Forecast</div>
                             </div>
                         </div>
                     </section>
+                    {% else %}
+                    <section id="sec-overview">
+                        <div style="padding: 24px; text-align: center; color: var(--text-muted;">
+                            <i class="fas fa-exclamation-circle" style="font-size: 1.5rem; margin-bottom: 8px; display: block;"></i>
+                            Overview data not available.
+                        </div>
+                    </section>
+                    {% endif %}
 
                     <!-- Time Series Analysis -->
+                    {% if 'timeseries' in results %}
                     <section class="content-panel" id="sec-ts">
                         <h2 class="panel-title"><i class="fas fa-wave-square"></i> TIME SERIES ANALYSIS</h2>
                         <div class="data-grid">
@@ -901,6 +913,15 @@
                             </div>
                         </div>
                     </section>
+                    {% else %}
+                    <section class="content-panel" id="sec-ts">
+                        <h2 class="panel-title"><i class="fas fa-wave-square"></i> TIME SERIES ANALYSIS</h2>
+                        <div style="padding: 24px; text-align: center; color: var(--text-muted);">
+                            <i class="fas fa-exclamation-circle" style="font-size: 1.5rem; margin-bottom: 8px; display: block;"></i>
+                            No time series analysis data available for this task.
+                        </div>
+                    </section>
+                    {% endif %}
 
                     <!-- White Noise Test Results -->
                     {% if results.get('timeseries', {}).get('white_noise_test') %}
@@ -1084,6 +1105,7 @@
                         </div>
                         {% endif %}
 
+                        {% if 'prediction' in results %}
                         <table class="tbl">
                             <thead><tr><th>MODEL</th><th>RMSE</th><th>MAE</th><th>MSE</th></tr></thead>
                             <tbody>
@@ -1097,6 +1119,12 @@
                                 {% endfor %}
                             </tbody>
                         </table>
+                        {% else %}
+                        <div style="padding: 24px; text-align: center; color: var(--text-muted);">
+                            <i class="fas fa-exclamation-circle" style="font-size: 1.5rem; margin-bottom: 8px; display: block;"></i>
+                            No prediction data available for this task.
+                        </div>
+                        {% endif %}
                     </section>
 
                     <!-- Band Analysis -->

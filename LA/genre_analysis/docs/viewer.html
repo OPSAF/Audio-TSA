@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🎵 音乐流派音频分析报告</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --text-secondary: #8b949e;
+    --accent: #58a6ff;
+    --accent2: #f78166;
+    --accent3: #3fb950;
+    --accent4: #d2a8ff;
+    --gold: #e3b341;
+    --red: #f85149;
+    --code-bg: #1c2128;
+    --table-stripe: #1a2029;
+    --shadow: 0 4px 24px rgba(0,0,0,0.4);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    min-height: 100vh;
+    line-height: 1.7;
+  }
+
+  /* ── Sidebar ── */
+  nav {
+    width: 280px;
+    min-width: 280px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 24px 0;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    z-index: 10;
+  }
+
+  nav .logo {
+    font-size: 1.3em;
+    font-weight: 700;
+    padding: 0 20px 20px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 16px;
+    color: var(--text);
+  }
+  nav .logo span { color: var(--accent2); }
+
+  nav a {
+    display: block;
+    padding: 8px 20px;
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 0.92em;
+    transition: all 0.15s;
+    border-left: 3px solid transparent;
+    margin: 2px 0;
+  }
+  nav a:hover {
+    color: var(--text);
+    background: rgba(88,166,255,0.06);
+    border-left-color: var(--accent);
+  }
+  nav a.active {
+    color: var(--text);
+    background: rgba(88,166,255,0.1);
+    border-left-color: var(--accent);
+    font-weight: 600;
+  }
+  nav .section-title {
+    font-size: 0.75em;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-secondary);
+    padding: 16px 20px 6px;
+    opacity: 0.7;
+  }
+
+  /* ── Main ── */
+  main {
+    flex: 1;
+    padding: 40px 48px;
+    max-width: 960px;
+    overflow-x: hidden;
+  }
+
+  /* ── Markdown rendered content ── */
+  .markdown-body h1 {
+    font-size: 2em;
+    margin: 0 0 8px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--border);
+    color: #fff;
+  }
+  .markdown-body h2 {
+    font-size: 1.4em;
+    margin: 36px 0 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+    color: var(--accent);
+  }
+  .markdown-body h3 {
+    font-size: 1.1em;
+    margin: 24px 0 8px;
+    color: var(--accent4);
+  }
+  .markdown-body p { margin: 10px 0; }
+  .markdown-body blockquote {
+    border-left: 3px solid var(--accent2);
+    padding: 8px 16px;
+    margin: 16px 0;
+    background: rgba(247,129,102,0.06);
+    color: var(--text-secondary);
+    border-radius: 0 6px 6px 0;
+  }
+  .markdown-body blockquote p { margin: 4px 0; }
+
+  /* Tables */
+  .markdown-body table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 0.88em;
+    background: var(--surface);
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .markdown-body th {
+    background: #21262d;
+    color: var(--text);
+    padding: 10px 14px;
+    text-align: left;
+    font-weight: 600;
+    white-space: nowrap;
+    border-bottom: 2px solid var(--border);
+  }
+  .markdown-body td {
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+  }
+  .markdown-body tr:nth-child(even) td { background: var(--table-stripe); }
+  .markdown-body tr:hover td { background: rgba(88,166,255,0.05); }
+
+  /* Code */
+  .markdown-body code {
+    background: var(--code-bg);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 0.85em;
+    color: var(--accent2);
+  }
+  .markdown-body pre {
+    background: var(--code-bg);
+    padding: 16px;
+    border-radius: 8px;
+    overflow-x: auto;
+    margin: 12px 0;
+    border: 1px solid var(--border);
+  }
+  .markdown-body pre code {
+    background: none;
+    padding: 0;
+    color: var(--text);
+  }
+
+  /* ASCII art blocks */
+  .markdown-body pre code:not([class]) {
+    color: var(--accent3);
+    font-size: 0.82em;
+    line-height: 1.4;
+  }
+
+  /* HR */
+  .markdown-body hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 32px 0;
+  }
+
+  /* Strong / emphasis */
+  .markdown-body strong { color: #fff; }
+  .markdown-body em { color: var(--text-secondary); }
+
+  /* Lists */
+  .markdown-body ul, .markdown-body ol { padding-left: 24px; margin: 8px 0; }
+  .markdown-body li { margin: 4px 0; }
+
+  /* Badge-ish highlights for special symbols */
+  .markdown-body .emoji { font-style: normal; }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    nav { width: 220px; min-width: 220px; }
+    main { padding: 24px; }
+  }
+  @media (max-width: 600px) {
+    body { flex-direction: column; }
+    nav {
+      width: 100%; min-width: auto; height: auto; position: static;
+      border-right: none; border-bottom: 1px solid var(--border);
+      padding: 12px;
+    }
+    nav .logo { padding-bottom: 12px; margin-bottom: 8px; }
+    main { padding: 16px; }
+  }
+
+  /* Loading spinner */
+  .loading {
+    display: flex; align-items: center; justify-content: center;
+    padding: 80px; color: var(--text-secondary); font-size: 1.1em;
+  }
+  .spinner {
+    width: 28px; height: 28px; border: 3px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: spin 0.7s linear infinite; margin-right: 12px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Error state */
+  .error-box {
+    background: rgba(248,81,73,0.1); border: 1px solid var(--red);
+    padding: 24px; border-radius: 8px; color: var(--red); margin: 24px 0;
+  }
+
+  /* ── Data highlight cards ── */
+  .highlight-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+    margin: 16px 0;
+  }
+  .highlight-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .highlight-card .label { font-size: 0.78em; color: var(--text-secondary); }
+  .highlight-card .value { font-size: 1.4em; font-weight: 700; color: #fff; margin-top: 4px; }
+  .highlight-card .value.high { color: var(--accent2); }
+  .highlight-card .value.low { color: var(--accent3); }
+  .highlight-card .value.mid { color: var(--accent4); }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">🎵 音乐分析<span>报告</span></div>
+
+  <div class="section-title">概览</div>
+  <a href="#" data-page="index" class="active">📊 总览与对比</a>
+
+  <div class="section-title">流派报告</div>
+  <a href="#" data-page="genres/blues">🎸 Blues 蓝调</a>
+  <a href="#" data-page="genres/classical">🎻 Classical 古典</a>
+  <a href="#" data-page="genres/country">🤠 Country 乡村</a>
+  <a href="#" data-page="genres/disco">🕺 Disco 迪斯科</a>
+  <a href="#" data-page="genres/hiphop">🎤 Hip-Hop 嘻哈</a>
+  <a href="#" data-page="genres/jazz">🎷 Jazz 爵士</a>
+  <a href="#" data-page="genres/metal">🤘 Metal 金属</a>
+  <a href="#" data-page="genres/pop">🎤 Pop 流行</a>
+  <a href="#" data-page="genres/reggae">🌴 Reggae 雷鬼</a>
+  <a href="#" data-page="genres/rock">🎸 Rock 摇滚</a>
+</nav>
+
+<main>
+  <div id="content" class="markdown-body">
+    <div class="loading">
+      <div class="spinner"></div> 加载报告中...
+    </div>
+  </div>
+</main>
+
+<script>
+  // ── Simple client-side router ──
+  const contentEl = document.getElementById('content');
+  const navLinks = document.querySelectorAll('nav a[data-page]');
+
+  // Configure marked.js
+  marked.setOptions({
+    breaks: true,
+    gfm: true,
+    headerIds: true,
+    mangle: false
+  });
+
+  // Custom renderer for better tables
+  const renderer = new marked.Renderer();
+  renderer.table = function(header, body) {
+    return `<div style="overflow-x:auto"><table><thead>${header}</thead><tbody>${body}</tbody></table></div>`;
+  };
+  marked.use({ renderer });
+
+  async function loadPage(page) {
+    contentEl.innerHTML = '<div class="loading"><div class="spinner"></div> 加载报告中...</div>';
+
+    try {
+      const resp = await fetch(`${page}.md`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+      const md = await resp.text();
+      const html = marked.parse(md);
+      contentEl.innerHTML = html;
+      // Scroll to top
+      window.scrollTo(0, 0);
+      // Update active nav state
+      navLinks.forEach(a => a.classList.remove('active'));
+      const active = document.querySelector(`nav a[data-page="${page}"]`);
+      if (active) active.classList.add('active');
+    } catch (err) {
+      contentEl.innerHTML = `
+        <div class="error-box">
+          <strong>⚠️ 加载失败</strong><br>
+          无法加载页面: <code>${page}.md</code><br>
+          <small>${err.message}</small><br><br>
+          <strong>🔧 解决方案：</strong><br>
+          1. <strong>推荐</strong>: 双击 <code>viewer_standalone.html</code>（无需服务器，即开即看）<br>
+          2. 运行 <code>serve.bat</code> 启动本地服务器<br>
+          3. 命令行: <code>py -m http.server 8080</code> 然后访问 http://localhost:8080/viewer.html
+        </div>`;
+    }
+  }
+
+  // Attach click handlers
+  navLinks.forEach(link => {
+    link.addEventListener('click', e => {
+      e.preventDefault();
+      const page = link.dataset.page;
+      loadPage(page);
+      // Update URL hash
+      window.location.hash = page;
+    });
+  });
+
+  // Load page from URL hash on startup, or default to index
+  const hash = window.location.hash.slice(1);
+  const initialPage = hash || 'index';
+  loadPage(initialPage);
+
+  // Handle back/forward
+  window.addEventListener('hashchange', () => {
+    const page = window.location.hash.slice(1) || 'index';
+    loadPage(page);
+  });
+</script>
+</body>
+</html>

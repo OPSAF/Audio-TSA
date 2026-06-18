@@ -160,6 +160,63 @@ def _safe_serialize_results(results: dict, task_id: str,
                              plot_files=[])
 
 
+def _extract_batch_extra(raw_results: dict) -> dict:
+    """
+    Extract structural analysis details BEFORE serialization (which strips
+    per-trend ARIMA types, structural segments, etc.).
+
+    Returns a JSON-safe dict for cross-song dashboards.
+    """
+    extra: dict = {}
+
+    # ── ARIMA per-trend types ───────────────────────────────────────────
+    mr = raw_results.get("model_analysis")
+    if mr is not None:
+        arima = getattr(mr, "arima", None)
+        if arima is not None and hasattr(arima, "per_trend"):
+            extra["arima_trend_types"] = {
+                k: v.trend_type for k, v in arima.per_trend.items()
+            }
+            extra["arima_trend_orders"] = {
+                k: list(v.best_order) for k, v in arima.per_trend.items()
+            }
+            extra["arima_stationary"] = {
+                k: v.is_stationary for k, v in arima.per_trend.items()
+            }
+            extra["arima_white_noise"] = {
+                k: v.is_white_noise for k, v in arima.per_trend.items()
+            }
+
+    # ── Structural segments ────────────────────────────────────────────
+    dyn_entry = raw_results.get("dynamics", {})
+    if isinstance(dyn_entry, dict):
+        seg = dyn_entry.get("segments", {})
+        if isinstance(seg, dict):
+            extra["structural_segments"] = {
+                "n_climax": len(seg.get("climax_indices", [])),
+                "n_calm": len(seg.get("calm_indices", [])),
+                "n_buildup": len(seg.get("buildup_indices", [])),
+                "n_transition": len(seg.get("transition_indices", [])),
+            }
+
+    # ── Unsupervised details ───────────────────────────────────────────
+    unsup = raw_results.get("unsupervised")
+    if unsup is not None:
+        extra["unsupervised"] = {
+            "n_change_points": len(getattr(unsup, "change_points", [])),
+            "n_segments": len(getattr(unsup, "segments", [])),
+            "n_motifs": len(getattr(unsup, "motifs", [])),
+            "n_clusters": getattr(unsup, "n_clusters", 0),
+            "silhouette_score": getattr(unsup, "silhouette_score", 0.0),
+            "recurrence_rate": getattr(unsup, "recurrence_rate", 0.0),
+            "determinism": getattr(unsup, "determinism", 0.0),
+            "laminarity": getattr(unsup, "laminarity", 0.0),
+            "reconstruction_error": getattr(unsup, "reconstruction_error", 0.0),
+        }
+
+    return extra
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Phase B — Cross-song commonality analysis
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -748,6 +805,9 @@ def run_batch(
             raw = run_per_file_analysis(fp, forecast_horizon=forecast_horizon,
                                          n_mels=n_mels, fast=fast)
 
+            # ── Extract structural details before serialization ──
+            batch_extra = _extract_batch_extra(raw)
+
             # ── Generate per-file plots (same rich output as app/main) ──
             per_fig_files = generate_per_file_plots(
                 raw, fp, fig_dir, forecast_horizon=forecast_horizon, n_mels=n_mels,
@@ -762,6 +822,7 @@ def run_batch(
                 "analysis_options": raw.get("analysis_options", []),
             })
             serialized["per_file_plots"] = per_fig_files
+            serialized["_batch_extra"] = batch_extra
 
             with open(out_path, "w", encoding="utf-8") as fh:
                 json.dump(serialized, fh, default=str, ensure_ascii=False)

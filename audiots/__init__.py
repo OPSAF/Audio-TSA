@@ -41,6 +41,7 @@ from . import config
 from . import prediction_cache
 from . import batch_ml
 from . import batch_viz
+from . import batch_stats
 
 __all__ = [
     "loader", "features", "dynamics", "volatility", "model_analysis",
@@ -48,5 +49,5 @@ __all__ = [
     "analysis", "prediction", "band_analysis", "visualization",
     "similarity", "similarity_viz", "discovery_viz",
     "config", "prediction_cache",
-    "batch_ml", "batch_viz",
+    "batch_ml", "batch_viz", "batch_stats",
 ]
